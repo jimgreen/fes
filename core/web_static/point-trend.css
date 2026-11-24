@@ -1,0 +1,437 @@
+.point-trend-host {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-top: 8px;
+}
+
+.point-trend-host[hidden],
+.point-trend [hidden] {
+  display: none !important;
+}
+
+.point-trend {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #dce6ee;
+  border-radius: 6px;
+  background: #fff;
+  color: #24384a;
+}
+
+.point-trend > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: #25525f;
+  background: #f4f8fa;
+  border-radius: inherit;
+  line-height: 1.4;
+}
+
+.point-trend[open] > summary {
+  border-bottom: 1px solid #dce6ee;
+  border-radius: 6px 6px 0 0;
+}
+
+.point-trend > summary strong { margin-inline: 2px 4px; }
+.point-trend-count, .point-trend-meta, .point-trend-status, .point-trend-range { color: #566c7e; font-size: 12px; }
+.point-trend-meta { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.point-trend-body {
+  display: grid;
+  box-sizing: border-box;
+  gap: 6px;
+  padding: 7px 10px;
+}
+
+.point-trend-toolbar, .point-trend fieldset {
+  display: flex;
+  gap: 5px 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.point-trend label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.point-trend input:not([type=checkbox]),
+.point-trend select,
+.point-trend button {
+  width: auto;
+  min-height: 28px;
+  margin: 0;
+  padding: 2px 5px;
+  border: 1px solid #cfdce6;
+  border-radius: 4px;
+  color: inherit;
+  background: #fff;
+  font: inherit;
+}
+
+.point-trend input[type=number] { width: 6.3em; font-variant-numeric: tabular-nums; }
+.point-trend input[type=color] { width: 31px; padding: 2px; cursor: pointer; }
+.point-trend-checkbox, .point-trend input[type=checkbox] { width: auto; padding: 0; }
+.point-trend input:disabled { background: #f2f5f7; }
+.point-trend button { cursor: pointer; color: #116b76; }
+.point-trend button:hover { background: #edf7f8; }
+.point-trend :focus-visible { outline: 2px solid #087f8c; outline-offset: 1px; }
+
+.point-trend-chart {
+  position: relative;
+  min-width: 0;
+  min-height: 120px;
+  height: clamp(165px, 26dvh, 290px);
+  background: var(--bg-canvas, #fbfdff);
+  border: var(--border, 1px solid #e1e9ef);
+  border-radius: 4px;
+}
+
+.point-trend-chart canvas { display: block; width: 100%; height: 100%; }
+.point-trend-empty {
+  position: absolute;
+  inset: 20% 14% 25%;
+  display: grid;
+  place-items: center;
+  color: #566c7e;
+  text-align: center;
+  pointer-events: none;
+}
+
+.point-trend-status, .point-trend-range, .point-trend-error { margin: 0; }
+.point-trend-range { font-variant-numeric: tabular-nums; }
+.point-trend-cursor {
+  position: absolute;
+  width: 1px;
+  background: #5e7284;
+  pointer-events: none;
+}
+.point-trend-tooltip {
+  position: absolute;
+  inset: 6px 6px auto auto;
+  max-width: min(52%, 360px);
+  max-height: calc(100% - 12px);
+  overflow: hidden;
+  padding: 5px 7px;
+  border-radius: 4px;
+  background: #203648f2;
+  color: #fff;
+  white-space: pre-wrap;
+  font-size: 11px;
+  box-shadow: 0 2px 8px #142a3c28;
+  pointer-events: none;
+}
+.point-trend-tooltip-left { inset-inline: 6px auto; }
+.point-trend-error { color: #963d36; font-size: 12px; }
+
+/* 右键唤出的纵轴/曲线设置模态弹窗 */
+dialog.point-trend-dialog {
+  width: min(92vw, 720px);
+  max-height: min(84dvh, 640px);
+  padding: 0;
+  border: 1px solid #cfdce6;
+  border-radius: 10px;
+  background: #fff;
+  color: #24384a;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.22);
+}
+dialog.point-trend-dialog::backdrop { background: rgba(15, 23, 42, 0.36); backdrop-filter: blur(2px); }
+.point-trend-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.point-trend-dialog-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.point-trend-dialog-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #566c7e;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.point-trend-dialog-close:hover { background: #f1f5f9; color: #0f172a; }
+.point-trend-axis-body,
+dialog.point-trend-dialog .point-trend-series {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  max-height: min(62dvh, 460px);
+  overflow: auto;
+}
+dialog.point-trend-dialog fieldset {
+  display: flex;
+  gap: 8px 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid #dce6ee;
+  border-radius: 6px;
+}
+dialog.point-trend-dialog fieldset legend { font-weight: 650; padding: 0 4px; }
+dialog.point-trend-dialog label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  white-space: nowrap;
+  font-size: 13px;
+}
+dialog.point-trend-dialog input:not([type=checkbox]),
+dialog.point-trend-dialog select,
+dialog.point-trend-dialog button:not(.point-trend-dialog-close) {
+  width: auto;
+  min-height: 28px;
+  margin: 0;
+  padding: 2px 7px;
+  border: 1px solid #cfdce6;
+  border-radius: 5px;
+  color: inherit;
+  background: #fff;
+  font: inherit;
+}
+dialog.point-trend-dialog input[type=number] { width: 6.2em; font-variant-numeric: tabular-nums; }
+dialog.point-trend-dialog input[type=color] { width: 32px; padding: 2px; cursor: pointer; }
+dialog.point-trend-dialog input:disabled { background: #f2f5f7; opacity: 0.7; }
+.point-trend-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+.point-trend-dialog-done {
+  min-width: 72px;
+  cursor: pointer;
+  background: #0d9488 !important;
+  border-color: #0d9488 !important;
+  color: #fff !important;
+  font-weight: 500;
+}
+.point-trend-dialog-done:hover { filter: brightness(1.06); }
+
+.point-trend-series:empty { display: none; }
+.point-trend-series-row {
+  display: flex;
+  align-items: center;
+  gap: 6px 10px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-top: 1px solid #e7eef3;
+}
+.point-trend-series-row:first-child { border-top: 0; padding-top: 0; }
+
+.point-trend-name { flex: 1 1 160px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.point-trend-latest { color: #566c7e; font-variant-numeric: tabular-nums; font-size: 12px; }
+.point-trend-series-row input[type=number] { width: 4.5em; }
+.point-trend-series-row input.point-trend-interval-input { width: 5.2em; }
+.point-trend-series-row input.point-trend-retention-input { width: 6.8em; }
+.point-trend-checkbox { accent-color: var(--accent, #2563eb); vertical-align: middle; cursor: pointer; }
+.point-trend-cell { min-width: 42px; width: 42px; white-space: nowrap; }
+.point-trend-row-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 2px var(--bg-surface, #fff);
+  flex-shrink: 0;
+}
+table tbody tr.point-trend-row-active,
+table tbody tr.point-trend-row-active > td {
+  background: var(--bg-selected, rgba(37, 99, 235, 0.08));
+  color: var(--text-primary, inherit);
+}
+table tbody tr.point-trend-row-active > td:first-child {
+  box-shadow: inset 3px 0 var(--accent, #2563eb);
+}
+table tbody tr.point-trend-row-active > .point-trend-cell-active {
+  box-shadow: inset 3px 0 var(--accent, #2563eb);
+}
+
+/* ==================== 表格 / 实时曲线双向可拖拽分隔条 ==================== */
+.point-trend-pane-hidden {
+  display: none !important;
+}
+
+.point-trend-splitter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 18px;
+  margin: 4px 0;
+  cursor: row-resize;
+  user-select: none;
+  touch-action: none;
+}
+
+.point-trend-splitter[hidden] {
+  display: none !important;
+}
+
+.point-trend-splitter::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--border-color, #cbd5e1);
+  border-radius: 2px;
+  transition: background 150ms ease, height 150ms ease;
+}
+
+.point-trend-splitter:hover::before,
+.point-trend-splitter.is-dragging::before {
+  height: 3px;
+  background: var(--accent, #2563eb);
+}
+
+.point-trend-splitter-grip {
+  position: relative;
+  z-index: 1;
+  width: 28px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border-color, #94a3b8);
+  transition: background 150ms ease;
+}
+
+.point-trend-splitter:hover .point-trend-splitter-grip,
+.point-trend-splitter.is-dragging .point-trend-splitter-grip {
+  background: var(--accent, #2563eb);
+}
+
+.point-trend-splitter-btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 16px;
+  padding: 0;
+  border: var(--border, 1px solid #cbd5e1);
+  border-radius: 999px;
+  background: var(--bg-surface, #ffffff);
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.point-trend-splitter-btn:hover,
+.point-trend-splitter-btn.is-active {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: var(--accent-contrast, #ffffff);
+}
+
+body.point-trend-resizing,
+body.point-trend-resizing * {
+  cursor: row-resize !important;
+  user-select: none !important;
+}
+
+.point-trend-host.is-trend-expanded {
+  flex: 1 1 0 !important;
+  display: flex;
+  flex-direction: column;
+  min-height: 0 !important;
+  overflow: hidden;
+}
+
+.point-trend-host.is-trend-expanded .point-trend {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.point-trend-host.is-trend-expanded .point-trend-body {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.point-trend-host.is-trend-expanded .point-trend-chart {
+  flex: 1 1 0 !important;
+  height: 0 !important;
+  min-height: 120px !important;
+}
+
+.point-trend-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 164px;
+  padding: 4px;
+  border: var(--border, 1px solid #cfdce6);
+  border-radius: var(--radius-card, 6px);
+  background: var(--bg-surface, #fff);
+  color: var(--text-primary, #124c57);
+  box-shadow: var(--shadow-dialog, 0 8px 24px rgba(15, 23, 42, 0.22));
+}
+
+.point-trend-menu[hidden] { display: none; }
+.point-trend-menu-sep { height: 1px; margin: 4px 2px; background: var(--border-color, #e2e8f0); }
+.point-trend-menu button {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary, #124c57);
+  font: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+.point-trend-menu button:focus, .point-trend-menu button:hover {
+  background: var(--bg-hover, #e7f3f5);
+  color: var(--text-primary, inherit);
+  outline: 0;
+}
+.point-trend-menu button.is-checked {
+  font-weight: 600;
+  color: var(--accent, #2563eb);
+}
+.point-trend-menu button.is-checked::before {
+  content: "✓ ";
+}
+.point-trend-menu button.is-danger { color: var(--danger, #dc2626); }
+.point-trend-menu button.is-danger:hover,
+.point-trend-menu button.is-danger:focus {
+  background: var(--danger-soft, rgba(220, 38, 38, 0.12));
+  color: var(--danger, #dc2626);
+}
+.point-trend-menu button[aria-disabled=true] { color: var(--text-muted, #94a3b8); cursor: default; background: transparent; }
+
+@media (max-width: 575px) {
+  .point-trend-body { padding: 6px; }
+  .point-trend-toolbar, .point-trend fieldset { gap: 5px 8px; }
+  .point-trend-axis > div { display: grid; }
+  .point-trend-name { flex-basis: calc(100% - 32px); }
+}

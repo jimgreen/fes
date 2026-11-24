@@ -1,0 +1,28 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.venv/
+
+# Local tooling and browser inspection output
+.ruff_cache/
+.playwright-cli/
+.vendor_inspect/
+output/
+
+# Generated runtime logs and SQLite rollback snapshots
+db/logs/
+db/packets/
+db/backups/
+db/*.scdfe_c-*.lock
+db/*.scdfe_writer.json
+db/*.scdfe_command.json
+db/iec104_server_config.json
+db/modbus_tcp_server_service_config.json
+db/scdfe_s.sqlite3
+db/*.sqlite3-wal
+db/*.sqlite3-shm
+db/*.connections.sqlite3
+db/*.packet-log.json
+
+# Local test result transcripts
+tests/*_result.txt
