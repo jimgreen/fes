@@ -445,9 +445,18 @@ body.layout-resizing:has(.layout-resizer-y.is-dragging) { cursor: row-resize !im
   margin-bottom: 10px;
   flex-shrink: 0;
 }
+.data-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+  min-width: 0;
+}
 .data-toolbar {
   justify-content: flex-start;
   flex-wrap: nowrap;
+  margin-bottom: 0;
 }
 .data-toolbar > .actions {
   flex: 0 0 auto;
@@ -458,7 +467,70 @@ body.layout-resizing:has(.layout-resizer-y.is-dragging) { cursor: row-resize !im
   min-width: 0;
   margin: 0;
 }
-.page-panel > .toolbar .title-group {
+.data-subbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.data-subbar > .data-tabs {
+  margin: 0;
+  flex: 0 1 auto;
+}
+.data-subbar > .view-tools {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 0;
+}
+/* 无子标签页（通道定义 / RTU 定义）：筛选、字段切换、表结构与操作按钮整合为单一整行 */
+.data-controls.no-subtabs {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px 10px;
+  flex-wrap: nowrap;
+}
+.data-controls.no-subtabs > .data-toolbar,
+.data-controls.no-subtabs > .data-subbar,
+.data-controls.no-subtabs > .data-subbar > .view-tools {
+  display: contents;
+}
+.data-controls.no-subtabs .global-filters {
+  order: 1;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.data-controls.no-subtabs .global-filters input[type="search"] {
+  width: 190px;
+}
+.data-controls.no-subtabs .global-filters .rtu-picker select {
+  width: 190px;
+}
+.data-controls.no-subtabs .segments {
+  order: 2;
+  flex: 0 0 auto;
+}
+.data-controls.no-subtabs #show-schema {
+  order: 3;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.data-controls.no-subtabs .actions {
+  order: 4;
+  margin-left: 0;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+@media (max-width: 1180px) {
+  .data-controls.no-subtabs {
+    flex-wrap: wrap;
+  }
+  .data-controls.no-subtabs .global-filters {
+    flex-wrap: wrap;
+  }
+}
+.page-panel .toolbar .title-group {
   display: none;
 }
 .title-group {
@@ -1391,7 +1463,7 @@ dialog::backdrop {
   padding: 6px 10px;
   border-radius: 5px;
   border: 1px solid var(--line);
-  background: var(--soft, rgba(127, 127, 127, 0.08));
+  background: var(--bg-subtle, rgba(127, 127, 127, 0.08));
   overflow-wrap: anywhere;
 }
 #command-dialog { width: min(520px, calc(100vw - 30px)); }

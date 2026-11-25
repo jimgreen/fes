@@ -63,6 +63,8 @@
   --ease: 180ms cubic-bezier(0.2, 0, 0, 1);
 
   /* 兼容旧变量别名 */
+  --bg-surface-2: var(--bg-subtle);
+  --text-muted: var(--text-tertiary);
   --ink: var(--text-primary);
   --muted: var(--text-secondary);
   --line: var(--border-color);
@@ -533,6 +535,12 @@
   --shadow: var(--shadow-card);
 }
 
+:root,
+[data-theme] {
+  --bg-surface-2: var(--bg-subtle);
+  --text-muted: var(--text-tertiary);
+}
+
 /* ==================== 基础排版与画布 ==================== */
 
 html,
@@ -820,6 +828,7 @@ body.workbench[data-log-module] .workbench-content > .log-browser {
 
 /* 消除卡片内嵌 toolbar 的“卡片套卡片”视觉噪声 */
 .page-panel > .toolbar,
+.page-panel .data-controls > .toolbar,
 .card > .toolbar,
 .panel > .toolbar,
 .diag-panel > .toolbar,
@@ -2161,7 +2170,7 @@ dialog.scada-confirm-dialog::backdrop {
 
 pre,
 #status-json {
-  background: var(--bg-surface-2) !important;
+  background: var(--bg-subtle) !important;
   color: var(--text-primary) !important;
   border: var(--border) !important;
 }

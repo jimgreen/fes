@@ -88,9 +88,9 @@ body[data-point-trends]:not(.workbench) > main {
   text-align: start;
   white-space: nowrap;
 }
-.trend-list-table th { position: sticky; top: 0; z-index: 1; color: var(--text-secondary, #355665); background: var(--bg-surface-2, #f2f7f9); }
+.trend-list-table th { position: sticky; top: 0; z-index: 1; color: var(--text-secondary, #355665); background: var(--bg-subtle, #f2f7f9); }
 .trend-list-table tr:last-child td { border-bottom: 0; }
-.trend-list-table tbody tr:nth-child(even) { background: var(--bg-surface-2, #f9fbfc); }
+.trend-list-table tbody tr:nth-child(even) { background: var(--table-stripe, #f9fbfc); }
 .trend-list-table .trend-list-name { min-width: 12em; white-space: normal; overflow-wrap: anywhere; }
 .trend-list-table .trend-list-empty { padding: 16px 10px; color: var(--text-secondary, #566c7e); white-space: normal; text-align: center; }
 .trend-list-value { min-width: 8.5em; font-variant-numeric: tabular-nums; }

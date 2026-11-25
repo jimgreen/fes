@@ -833,6 +833,11 @@ function showView() {
     pointPanel.removeAttribute("tabindex");
   }
   $("#helper-tabs").hidden = !group || emptyParameters;
+  const hasSubtabs = !$("#point-tabs").hidden || !$("#helper-tabs").hidden;
+  const controls = $("#data-controls");
+  if (controls) controls.classList.toggle("no-subtabs", !hasSubtabs);
+  const subbar = $("#data-subbar");
+  if (subbar) subbar.hidden = !hasSubtabs && emptyParameters;
   const available = availableGroupTables(group);
   $("#helper-tabs").querySelectorAll("button").forEach((tab) => {
     const selected = tab.dataset.tabResource === state.resource;
