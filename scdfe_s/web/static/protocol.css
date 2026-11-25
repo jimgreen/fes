@@ -148,7 +148,7 @@ body[data-points] .points-single-toolbar .actions { margin-left:auto; flex:0 0 a
 .point-tabs-row .point-tabs { flex:0 1 auto; margin:0; }
 .point-tabs-row .point-name-filter { width:220px; max-width:100%; margin-left:4px; }
 .point-tabs-row > #points-refresh { margin-left:auto; }
-.lb-top-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+.lb-top-row { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; margin:0; }
 .lb-top-row > .lb-record-tabs { margin:0; flex:0 0 auto; }
 .lb-top-row > .lb-toolbar { flex:1 1 auto; margin:0; min-width:0; }
 /* Keep the first grid item in place while hiding its contents; display:none

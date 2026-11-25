@@ -684,6 +684,8 @@ a:hover {
   color: var(--sidebar-text) !important;
   border-right: 1px solid var(--sidebar-border);
   padding: 12px 10px !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .workbench .side-title,
