@@ -956,7 +956,7 @@ small {
 /* ==================== 按钮、输入框与下拉控件 ==================== */
 
 /* 仅对标准交互按钮应用边框与填充，排除侧边栏导航、行内文本按钮、Tab、文件列表与自定义轻按钮 */
-button:not(.nav):not(.row-button):not(.sort-button):not(.icon-button):not(.point-trend-dialog-close):not(.lb-file):not(.log-file):not(.lb-record-tab):not(.log-record-tab):not(.page-tab):not(.layout-resizer),
+button:not(.nav):not(.row-button):not(.sort-button):not(.icon-button):not(.point-trend-dialog-close):not(.lb-file):not(.log-file):not(.lb-record-tab):not(.log-record-tab):not(.page-tab):not(.layout-resizer):not([role="tab"]),
 .button,
 .database-select-button,
 .protocol-card nav a {
@@ -970,7 +970,7 @@ button:not(.nav):not(.row-button):not(.sort-button):not(.icon-button):not(.point
   transition: background var(--ease), border-color var(--ease), color var(--ease), box-shadow var(--ease), transform 100ms ease;
 }
 
-button:not(.nav):not(.row-button):not(.sort-button):not(.icon-button):not(.point-trend-dialog-close):not(.lb-file):not(.log-file):not(.lb-record-tab):not(.log-record-tab):not(.page-tab):not(.layout-resizer):hover:not(:disabled),
+button:not(.nav):not(.row-button):not(.sort-button):not(.icon-button):not(.point-trend-dialog-close):not(.lb-file):not(.log-file):not(.lb-record-tab):not(.log-record-tab):not(.page-tab):not(.layout-resizer):not([role="tab"]):hover:not(:disabled),
 .button:hover:not(:disabled),
 .database-select-button:hover:not(:disabled),
 .protocol-card nav a:hover {
@@ -1873,8 +1873,18 @@ body[data-points] .point-editor .dialog-head h2,
   background: rgba(251, 191, 36, 0.14) !important;
 }
 
+.layout-resizer {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.layout-resizer::before {
+  background: var(--border-color) !important;
+}
+
 [data-color-scheme="dark"] .layout-resizer::before {
-  background: rgba(148, 163, 184, 0.35);
+  background: var(--border-color) !important;
 }
 
 [data-color-scheme="dark"] #database-entry code {
