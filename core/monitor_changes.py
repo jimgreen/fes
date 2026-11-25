@@ -194,7 +194,11 @@ class MappedMonitorReader:
                                 continue
                             sample = (value,quality,int(stamp or 0)) if value is not None else None
                             changes.update({key: sample for key in targets[no]})
-            finally:
+            except BaseException:
+                con.execute('ROLLBACK TO mapped_monitor')
+                con.execute('RELEASE mapped_monitor')
+                raise
+            else:
                 con.execute('RELEASE mapped_monitor')
         # No cache/cursor mutation until every query in the snapshot succeeded.
         for key, sample in changes.items():

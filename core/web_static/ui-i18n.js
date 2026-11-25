@@ -244,6 +244,38 @@
     ["近 24 小时", "Last 24h", "За 24 ч"],
     ["进程监控", "Processes", "Процессы"],
     ["通信监控", "Communications", "Каналы связи"],
+    ["通道与进程监控", "Channels & Processes", "Каналы и процессы"],
+    ["全链路对账", "Point Trace", "Сверка точек"],
+    ["全链路对账 · SCADA", "Point Trace · SCADA", "Сверка точек · SCADA"],
+    ["SCADA · 全链路对账", "SCADA · Point Trace", "SCADA · Сверка точек"],
+    ["操作审计", "Operation Audit", "Аудит операций"],
+    ["检索审计", "Search Audit", "Поиск аудита"],
+    ["报文译码", "Packet Decode", "Разбор кадра"],
+    ["复制译码", "Copy Decoded", "Копировать"],
+    ["仅看已映射", "Mapped Only", "Только сопоставленные"],
+    ["RTU / 源通道", "RTU / Source Ch.", "RTU / Ист. канал"],
+    ["点号 / 名称", "Point / Name", "Точка / Имя"],
+    ["采集值", "Acquired Value", "Знач. сбора"],
+    ["采集状态 / 时刻", "Status / Time", "Статус / Время"],
+    ["转发通道 / 规约", "Fwd Ch. / Protocol", "Канал ретр. / Протокол"],
+    ["转发点号 / 目标地址", "Fwd Point / Address", "Точка ретр. / Адрес"],
+    ["转发值 / 时刻", "Fwd Value / Time", "Знач. ретр. / Время"],
+    ["快捷下发指令", "Quick Send Command", "Быстрая команда"],
+    ["自动仿真激励", "Auto Simulator", "Автосимулятор"],
+    ["开始激励", "Start Sim", "Запустить"],
+    ["正弦波", "Sine Wave", "Синус"],
+    ["三角斜坡", "Triangle Ramp", "Пила"],
+    ["随机抖动", "Random Jitter", "Случайный"],
+    ["YX 周期翻转", "YX Toggle", "Переключение YX"],
+    ["翻转", "Toggle", "Перекл."],
+    ["一键连续编址", "Auto Address", "Автоадресация"],
+    ["沿用源点名称", "Use Source Names", "Имена источников"],
+    ["起始转发点号", "Start Point No.", "Нач. № точки"],
+    ["地址步长", "Address Step", "Шаг адреса"],
+    ["批量删除", "Batch Delete", "Удалить выбранные"],
+    ["批量改比例/偏移", "Batch Scale/Base", "Масштаб/смещ."],
+    ["批量修改 YC 比例 / 基值", "Batch Edit YC Scale / Base", "Пакетное изменение YC"],
+    ["应用到已选测点", "Apply to Selected", "Применить"],
     ["运行日志", "Runtime Logs", "Журнал работы"],
     ["日志报文", "Logs & Packets", "Журналы и кадры"],
     ["报文日志", "Packet Logs", "Кадры обмена"],
@@ -1423,7 +1455,39 @@
       /^诊断(?:字段)?\s*(\d+)\s*项$/,
       { "en-US": (_, n) => `${n} diag fields`, "ru-RU": (_, n) => `Диагн. полей: ${n}` },
     ],
+    [
+      /^(\d+)\s*条$/,
+      { "en-US": (_, n) => `${n} items`, "ru-RU": (_, n) => `${n} зап.` },
+    ],
+    [
+      /^(\d+)\s*秒刷新$/,
+      { "en-US": (_, n) => `${n}s Auto`, "ru-RU": (_, n) => `Авто ${n}с` },
+    ],
   ];
+  Object.assign(I18N_DICT["en-US"], {
+    "2秒刷新": "2s Auto",
+    "连接": "Conn",
+    "读取中…": "Loading…",
+    "读取 RTU…": "Loading RTUs…",
+    "条": "items",
+    "帧格式": "Frame Format",
+    "标准帧 (0)": "Standard (0)",
+    "扩展帧 (1)": "Extended (1)",
+    "数据": "Data",
+    "暂无连接记录": "No connection records",
+  });
+  Object.assign(I18N_DICT["ru-RU"], {
+    "2秒刷新": "Авто 2с",
+    "连接": "Соед.",
+    "读取中…": "Загрузка…",
+    "读取 RTU…": "Загрузка RTU…",
+    "条": "зап.",
+    "帧格式": "Формат кадра",
+    "标准帧 (0)": "Стандарт (0)",
+    "扩展帧 (1)": "Расширенный (1)",
+    "数据": "Данные",
+    "暂无连接记录": "Нет записей подключений",
+  });
 
   let currentTheme = "minimalist-light";
   let currentLang = "zh-CN";
@@ -1671,10 +1735,31 @@
     updateControls();
   }
 
-  // 全局快捷操作：按 / 快速聚焦可见搜索框
+  // 全局快捷操作：/ 聚焦搜索框，搜索框内 Esc 清空并失焦，Alt+R 触发当前页刷新
   document.addEventListener("keydown", event => {
-    if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
     const tag = event.target?.tagName;
+    if (event.key === "Escape" && tag === "INPUT" && event.target.type === "search" && !document.querySelector("dialog[open]")) {
+      if (event.target.value) {
+        event.target.value = "";
+        event.target.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      event.target.blur();
+      return;
+    }
+    if (event.altKey && !event.ctrlKey && !event.metaKey && (event.key === "r" || event.key === "R")) {
+      if (document.querySelector("dialog[open]")) return;
+      const refreshIds = ["#refresh", "#points-refresh", "#test-refresh", "#scdfe-refresh", "#process-refresh", "#logs-refresh", "#lb-refresh"];
+      for (const sel of refreshIds) {
+        const btn = document.querySelector(sel);
+        if (btn && btn.offsetParent !== null && !btn.disabled && !btn.closest("[hidden]")) {
+          event.preventDefault();
+          btn.click();
+          return;
+        }
+      }
+      return;
+    }
+    if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || event.target?.isContentEditable) return;
     if (document.querySelector("dialog[open]")) return;
     const candidates = document.querySelectorAll('input[type="search"], #point-search, #search, #lb-keyword, #log-search, #keyword');
@@ -1694,12 +1779,35 @@
   document.documentElement.lang = currentLang;
 
   let pendingTranslate = false;
-  function scheduleTranslate() {
-    if (isTranslating || currentLang === "zh-CN" || pendingTranslate) return;
+  const pendingTargets = new Set();
+  function scheduleTranslate(records) {
+    if (isTranslating || currentLang === "zh-CN") return;
+    if (Array.isArray(records) && records.length) {
+      for (const rec of records) {
+        if (rec.type === "childList") {
+          for (const added of rec.addedNodes) pendingTargets.add(added);
+          if (!rec.addedNodes.length && rec.target) pendingTargets.add(rec.target);
+        } else if (rec.target) {
+          pendingTargets.add(rec.target);
+        }
+      }
+    } else if (document.body) {
+      pendingTargets.add(document.body);
+    }
+    if (pendingTranslate || !pendingTargets.size) return;
     pendingTranslate = true;
     const run = () => {
       pendingTranslate = false;
-      if (currentLang !== "zh-CN") translateRoot(document.body);
+      if (currentLang === "zh-CN") { pendingTargets.clear(); return; }
+      const nodes = Array.from(pendingTargets);
+      pendingTargets.clear();
+      // 若变动过多或含 document.body 则直接整树翻译，否则仅翻译最小去重变动子树以降低轮询 CPU。
+      if (nodes.length > 64 || nodes.includes(document.body)) {
+        translateRoot(document.body);
+        return;
+      }
+      const unique = nodes.filter(node => node.isConnected && !nodes.some(other => other !== node && other.contains && other.contains(node)));
+      for (const node of unique) translateRoot(node);
     };
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(run);
     else setTimeout(run, 16);

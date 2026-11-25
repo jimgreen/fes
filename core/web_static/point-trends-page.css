@@ -54,20 +54,51 @@ body[data-point-trends]:not(.workbench) > main {
 .trend-list-status { min-height: 1.35em; margin: 6px 0 0; flex: 0 0 auto; }
 .trend-list-error { color: var(--danger, #a22b34); margin: 0 0 8px; font-size: 13px; flex: 0 0 auto; }
 
-.trend-point-list button, .trend-cell-input, .trend-cell-select {
+.trend-point-list button {
   box-sizing: border-box;
-  min-height: 28px;
+  min-height: 26px;
   border: var(--border, 1px solid #cfdce6);
   border-radius: var(--radius-btn, 5px);
   color: var(--text-primary, #164a55);
   background: var(--bg-surface, white);
-  padding: 3px 8px;
+  padding: 2px 8px;
   font: inherit;
 }
-.trend-cell-input { font-variant-numeric: tabular-nums; padding: 2px 6px; }
-.trend-cell-select { padding: 2px 6px; min-width: 6.8em; }
-.trend-interval-input { width: 5.2em; }
-.trend-retention-input { width: 7.2em; }
+/* 表格单元格内嵌输入/下拉控件无缝铺满单元格、去独立边框与圆角，聚焦采用内嵌高亮 */
+.trend-list-table td:has(> .trend-cell-input),
+.trend-list-table td:has(> .trend-cell-select) {
+  padding: 0 !important;
+}
+.trend-cell-input,
+.trend-cell-select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 30px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-primary, #164a55);
+  padding: 4px 8px;
+  font: inherit;
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+.trend-cell-input { font-variant-numeric: tabular-nums; text-align: right; }
+.trend-cell-select { min-width: 6.8em; cursor: pointer; }
+.trend-cell-input:hover,
+.trend-cell-select:hover { background: var(--bg-hover, #edf7f8) !important; }
+.trend-cell-input:focus,
+.trend-cell-select:focus {
+  outline: none !important;
+  background: var(--bg-surface, white) !important;
+  box-shadow: inset 0 0 0 1.5px var(--accent, #087f8c) !important;
+}
+.trend-cell-input:invalid {
+  background: var(--danger-soft, rgba(220,38,38,.10)) !important;
+  box-shadow: inset 0 0 0 1.5px var(--danger, #dc2626) !important;
+}
+.trend-interval-input { min-width: 5.2em; }
+.trend-retention-input { min-width: 7.2em; }
 .trend-point-list button:not(:disabled) { cursor: pointer; }
 .trend-point-list button:not(:disabled):hover { background: var(--bg-hover, #edf7f8); }
 .trend-point-list :disabled { opacity: .55; }

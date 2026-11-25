@@ -100,6 +100,21 @@ class Point:
             old=self._info
             self._info=Information(old.value,Quality(value),old.recorded_at,old.qualifier,old.transient)
 
+    def set_sample(self, value, quality=None):
+        """在同一把锁内原子更新点值与质量，避免并发总召/周期上送发出“新值+旧质量”撕裂帧。"""
+        base=self._base_type
+        with self._lock:
+            old=self._info
+            target_quality = old.quality if quality is None else Quality(quality)
+            constructor=self._info_cls
+            stamp=datetime.now(timezone.utc) if self._is_timed else None
+            if base in COMMAND:
+                self._info=constructor(value,qualifier=old.qualifier,recorded_at=stamp)
+            elif base==5:
+                self._info=constructor(value,transient=old.transient,quality=target_quality,recorded_at=stamp)
+            else:
+                self._info=constructor(value,quality=target_quality,recorded_at=stamp)
+
     @property
     def recorded_at(self): return self.info.recorded_at
 
@@ -377,7 +392,10 @@ class Server:
             if len(rows)!=1 or rows[0][0]!=0: self._reply(link,asdu,47);return
             success=True
             if typ==103:
-                stamp=decode_time(rows[0][2])
+                try:
+                    stamp=decode_time(rows[0][2])
+                except ValueError:
+                    self._reply(link,asdu,7,negative=True);return
                 result=invoke(self._clock,self,link.peer[0],stamp,default=ResponseState.SUCCESS)
                 success=result is not False and result!=ResponseState.FAILURE
             elif typ==104:
@@ -495,7 +513,9 @@ class Connection:
 
     def _poll(self, now):
         if (self._link is not None and not self._link.closed) or now<self._next_retry: return
-        self._next_retry=now+.5
+        fails = getattr(self, '_retry_failures', 0)
+        delay = min(15.0, 0.5 * (2 ** min(fails, 5)))
+        self._next_retry = now + delay
         sock=None
         try:
             addresses=socket.getaddrinfo(self.ip,self.port,0,socket.SOCK_STREAM)
@@ -512,9 +532,11 @@ class Connection:
             self.client._reactor.add(self._link)
         except OSError as exc:
             if sock: sock.close()
+            self._retry_failures = fails + 1
             self.last_error=str(exc);self._state(ConnectionState.CLOSED_AWAIT_OPEN)
 
     def _connected(self, link):
+        self._retry_failures = 0
         self._state(ConnectionState.OPEN_MUTED)
         if self.init!=Init.MUTED: link.u(7,request=True)
 
@@ -553,6 +575,9 @@ class Connection:
         if typ in (103, 107):
             # 比对公共地址 CA 与信息体地址 IOA（跳过可能被 RTU 校准的时间戳与 OA 差异）
             return frame[10:15] == pending_asdu[4:9]
+        if typ in (58, 59, 61, 62, 63) and len(frame) == len(pending_asdu) + 6 and len(frame) > 22:
+            # 带 CP56Time2a 时标的遥控/遥调允许 RTU 在确认帧回填实际时钟，比对末尾 7 字节时标之前的内容。
+            return frame[9:-7] == pending_asdu[3:-7]
         return frame[9:] == pending_asdu[3:]
 
     def _asdu(self, link, frame):
@@ -560,8 +585,13 @@ class Connection:
         if len(asdu) >= 6 and asdu[0] not in Type._value2member_map_:
             # 未支持的合法标准 ASDU 类型仅触发异常回调，不抛出异常导致断链重连死循环。
             unknown_msg = IncomingMessage(
-                asdu[0], asdu[2] & 63, int.from_bytes(asdu[4:6], 'little'),
-                asdu[3], bool(asdu[2] & 64), False, frame,
+                raw=frame,
+                type=asdu[0],
+                cot=asdu[2] & 63,
+                common_address=int.from_bytes(asdu[4:6], 'little'),
+                originator_address=asdu[3],
+                is_negative=bool(asdu[2] & 64),
+                is_test=bool(asdu[2] & 128),
             )
             invoke(self._unexpected, self, unknown_msg, Umc.UNKNOWN_TYPE_ID)
             return

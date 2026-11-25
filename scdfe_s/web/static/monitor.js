@@ -122,7 +122,7 @@
         const processName = serviceName ? `scdfe_s-${serviceName}` : "—";
         const startedAt = bound ? status.started_at : channel.process_start_time;
         const heartbeatAt = running ? Date.now() : channel.process_heartbeat_time;
-        return `<tr><td><strong>RTU ${esc(channel.rtu_id)} · ${esc(channel.name || "未命名")}</strong><span class="cell-sub">通道 ${esc(channel.channel_id ?? "—")}</span></td><td class="mono">${esc(processName)}</td><td>${esc(protocolLabels[channel.channel_type] || channel.channel_type || "未配置")}</td><td>${esc(channelStatus(channel, bound ? service : null))}</td><td class="mono">${esc(channel.process_pid || "—")}</td><td>${fmt(startedAt)}</td><td>${fmt(heartbeatAt, true)}</td><td title="${esc(error)}">${esc(error)}</td><td>${action} <a href="/communication">通信</a> <a href="/logs?channel_id=${encodeURIComponent(channel.channel_id ?? "")}">日志</a></td></tr>`;
+        return `<tr><td><strong>RTU ${esc(channel.rtu_id)} · ${esc(channel.name || "未命名")}</strong><span class="cell-sub">通道 ${esc(channel.channel_id ?? "—")}</span></td><td class="mono">${esc(processName)}</td><td>${esc(protocolLabels[channel.channel_type] || channel.channel_type || "未配置")}</td><td>${esc(channelStatus(channel, bound ? service : null))}</td><td class="mono">${esc(channel.process_pid || "—")}</td><td>${esc(fmt(startedAt))}</td><td>${esc(fmt(heartbeatAt, true))}</td><td title="${esc(error)}">${esc(error)}</td><td>${action} <a href="/communication">通信</a> <a href="/logs?channel_id=${encodeURIComponent(channel.channel_id ?? "")}">日志</a></td></tr>`;
       }).join("");
       show("#rows", rows || `<tr><td colspan="9">暂无通信通道</td></tr>`);
       msg(`共 ${(channels.items || []).length} 个通信通道`);
@@ -131,7 +131,7 @@
   async function loadCommunications({fresh = false} = {}) {
     try {
       const views = await fetchViews([
-        "/api/rtus?limit=500&offset=0&sort=rtu_id&order=asc&fields=rtu_id,channel_id,channel_type,name,process_enable,process_error,packet_recording",
+        "/api/rtus?limit=500&offset=0&sort=rtu_id&order=asc&fields=rtu_id,channel_id,channel_type,name,process_enable,process_pid,process_error,packet_recording",
         "/api/monitor/communications",
       ], {fresh});
       if (!views) return;
@@ -161,7 +161,8 @@
           const hostPort = (host.includes(":") && !host.startsWith("[") ? `[${host}]` : host) + ":" + endpoint.port;
           address = `<span class="mono">${esc(hostPort)}</span><small class="cell-sub">${endpoint.role === "listen" ? "监听" : "远端"} · ${esc(endpoint.transport)}</small>`;
         }
-return `<tr><td><strong>${esc(channel.rtu_id)} · ${esc(channel.name || "未命名")}</strong></td><td>${esc(channel.channel_id ?? "—")}</td><td>${esc(protocolLabels[channel.channel_type] || channel.channel_type || "未配置")}</td><td>${address}</td><td>${Number(channel.process_enable) ? "启用" : "停用"}</td><td><span class="communication-state ${bound && (runtime.state === "running" || service.running) ? "is-running" : ""}">${esc(runtimeLabel(runtime, state))}</span></td><td>${esc(runtime.connection_state || (bound ? connections : "—"))}</td><td>${esc(pointCount)}</td><td class="mono">${esc(counts)}</td><td class="mono" title="接收 / 发送">${esc(traffic)}</td><td>${Number(channel.packet_recording) ? "开启" : "关闭"}</td><td class="communication-error" title="${esc(JSON.stringify(diagnostic))}"><span>${esc(diagnosticText)}</span><small class="cell-sub">${esc(error)}</small></td><td class="communication-actions">${action}<a href="/connections?rtu_id=${encodeURIComponent(channel.rtu_id)}">连接详情</a><a href="/test?rtu_id=${encodeURIComponent(channel.rtu_id)}">查看</a></td></tr>`;
+        const pidText = runtime.process_pid || channel.process_pid ? `<small class="cell-sub mono">PID ${esc(runtime.process_pid || channel.process_pid)}</small>` : "";
+return `<tr><td><strong>${esc(channel.rtu_id)} · ${esc(channel.name || "未命名")}</strong></td><td>${esc(channel.channel_id ?? "—")}</td><td>${esc(protocolLabels[channel.channel_type] || channel.channel_type || "未配置")}</td><td>${address}</td><td>${Number(channel.process_enable) ? "启用" : "停用"}</td><td><span class="communication-state ${bound && (runtime.state === "running" || service.running) ? "is-running" : ""}">${esc(runtimeLabel(runtime, state))}</span>${pidText}</td><td>${esc(runtime.connection_state || (bound ? connections : "—"))}</td><td>${esc(pointCount)}</td><td class="mono">${esc(counts)}</td><td class="mono" title="接收 / 发送">${esc(traffic)}</td><td>${Number(channel.packet_recording) ? "开启" : "关闭"}</td><td class="communication-error" title="${esc(JSON.stringify(diagnostic))}"><span>${esc(diagnosticText)}</span><small class="cell-sub">${esc(error)}</small></td><td class="communication-actions">${action}<a href="/connections?rtu_id=${encodeURIComponent(channel.rtu_id)}">连接详情</a><a href="/test?rtu_id=${encodeURIComponent(channel.rtu_id)}">测试</a><a href="/logs?channel_id=${encodeURIComponent(channel.channel_id ?? "")}">日志</a></td></tr>`;
       }).join("") || `<tr><td colspan="13" class="empty">暂无通信通道</td></tr>`;
       show("#communication-rows", rows);
       msg(`共 ${channels.total ?? (channels.items || []).length} 个通道`);
@@ -180,19 +181,22 @@ return `<tr><td><strong>${esc(channel.rtu_id)} · ${esc(channel.name || "未命�
   async function action(button) {
     const service = button.dataset.service, operation = button.dataset.action;
     if (button.disabled || controlPending.has(service) || !["start", "stop"].includes(operation)) return;
+    if (operation === "stop" && typeof window.scadaConfirm === "function") {
+      if (!(await window.scadaConfirm(`确认停止服务 ${service}？`, { title: "确认停止", confirmText: "确认停止", danger: true }))) return;
+    }
     setControlPending(service, true);
     try { await api(`/api/monitor/communications/${encodeURIComponent(service)}/${operation}`, {method:"POST", body:"{}"}); await (document.body.dataset.monitor === "processes" ? loadProcesses({fresh:true}) : loadCommunications({fresh:true})); msg("操作已完成"); }
     catch (e) { msg(e.message, true); } finally { setControlPending(service, false); }
   }
   if (document.body.dataset.monitor) {
     const kind = document.body.dataset.monitor;
-    if (kind === "processes") { loadProcesses(); $("#refresh").onclick = loadProcesses; }
-    if (kind === "communications") { loadCommunications(); $("#refresh").onclick = loadCommunications; }
+    if (kind === "processes") { loadProcesses(); $("#refresh").onclick = () => loadProcesses({fresh:true}); }
+    if (kind === "communications") { loadCommunications(); $("#refresh").onclick = () => loadCommunications({fresh:true}); }
     if (kind === "logs") {
       const select = $("#service"); services.forEach(x => select.insertAdjacentHTML("beforeend", `<option value="${esc(x)}">${esc(x)}</option>`));
       loadLogs(); $("#refresh").onclick = loadLogs; $("#service").onchange = loadLogs; $("#level").onchange = loadLogs; $("#keyword").oninput = (() => { let t; return () => { clearTimeout(t); t = setTimeout(loadLogs, 250); }; })();
     }
     document.addEventListener("click", e => { const b = e.target.closest("button[data-service]"); if (b) action(b); });
-    setInterval(() => { if (!document.hidden && !pending) { if (kind === "processes") loadProcesses(); else if (kind === "communications") loadCommunications(); else loadLogs(); } }, 5000);
+    setInterval(() => { if (!document.hidden && !pending && !document.querySelector("dialog[open]")) { if (kind === "processes") loadProcesses(); else if (kind === "communications") loadCommunications(); else loadLogs(); } }, 5000);
   }
 })();

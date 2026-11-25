@@ -312,10 +312,8 @@ class TransRuntime:
         self._last_error_time = now_ms()
 
     def _update_state(self, **values):
-        connection = None
         try:
             with self.store.connection() as con:
-                connection = con
                 con.execute("BEGIN IMMEDIATE")
                 self._persist_runtime_status(
                     values,
@@ -337,8 +335,6 @@ class TransRuntime:
                 con.commit()
             return True
         except Exception as exc:
-            if connection is not None and connection.in_transaction:
-                connection.rollback()
             self._runtime_status.invalidate(self.channel_id)
             self.logger.error(f"写入转发进程状态失败: {exc}")
             return False
@@ -350,7 +346,7 @@ class TransRuntime:
             if not self._next_heartbeat:
                 values.update(process_status=2, process_pid=os.getpid())
             if self._update_state(**values):
-                self._next_heartbeat = now + 1.0
+                self._next_heartbeat = now + 3.0
 
     def load(self):
         with self.store.connection() as con:
@@ -534,7 +530,7 @@ class TransRuntime:
         try:
             with self.store.connection() as con:
                 previous = con.execute('PRAGMA busy_timeout').fetchone()[0]
-                con.execute('PRAGMA busy_timeout=0')
+                con.execute('PRAGMA busy_timeout=20')
                 try:
                     stamp=time.perf_counter(); con.execute("BEGIN IMMEDIATE")
                     self._latency.observe('t_runtime_lock_ms',(time.perf_counter()-stamp)*1000)
@@ -553,7 +549,10 @@ class TransRuntime:
                     self._latency.observe('t_runtime_commit_ms',(time.perf_counter()-stamp)*1000)
                 finally:
                     if con.in_transaction:con.rollback()
-                    con.execute(f'PRAGMA busy_timeout={previous}')
+                    try:
+                        con.execute(f'PRAGMA busy_timeout={previous}')
+                    except sqlite3.Error:
+                        pass
         except Exception as exc:
             with self._point_runtime_lock:
                 self._point_runtime_metrics['failures'] += 1
@@ -834,16 +833,18 @@ class TransRuntime:
         source_rtus = sorted({int(self.points[key].source_rtu_id) for key in soe_keys})
         source_meta: dict[tuple[int, int], tuple[Any, Any]] = {}
         with self.store.connection() as con:
-            placeholders = ",".join("?" for _ in source_rtus)
-            for row in con.execute(
-                f'''SELECT r.rtu_id, m.pnt_no, m.type_id, m.time_tag
-                    FROM fes_rtu_define r
-                    JOIN fes_channel_iec104_point_define m ON m.channel_id=r.channel_id
-                    WHERE r.rtu_id IN ({placeholders})
-                      AND r.channel_type='iec104' AND m.kind='yx' ''',
-                source_rtus,
-            ):
-                source_meta[(int(row['rtu_id']), int(row['pnt_no']))] = (row['type_id'], row['time_tag'])
+            for start_idx in range(0, len(source_rtus), 400):
+                chunk = source_rtus[start_idx:start_idx + 400]
+                placeholders = ",".join("?" for _ in chunk)
+                for row in con.execute(
+                    f'''SELECT r.rtu_id, m.pnt_no, m.type_id, m.time_tag
+                        FROM fes_rtu_define r
+                        JOIN fes_channel_iec104_point_define m ON m.channel_id=r.channel_id
+                        WHERE r.rtu_id IN ({placeholders})
+                          AND r.channel_type='iec104' AND m.kind='yx' ''',
+                    chunk,
+                ):
+                    source_meta[(int(row['rtu_id']), int(row['pnt_no']))] = (row['type_id'], row['time_tag'])
         for key in soe_keys:
             point = self.points[key]
             meta = source_meta.get((int(point.source_rtu_id), int(point.source_pnt_no)))
@@ -851,7 +852,8 @@ class TransRuntime:
                 continue
             raw_typ, time_tag = meta
             typ = int(raw_typ or 0)
-            if time_tag == 'CP56Time2a' and typ in (0, 1, 2, 3):
+            norm_tag = str(time_tag or '').strip().upper().replace('-', '')
+            if norm_tag == 'CP56TIME2A' and typ in (0, 1, 2, 3):
                 typ = {0: 30, 1: 30, 2: 31, 3: 31}[typ]
             if typ not in (30, 31):
                 continue
@@ -1177,7 +1179,7 @@ class TransRuntime:
                     self._pump_soe()
                     if time.monotonic() >= self._next_runtime_flush:
                         self._flush_point_runtime()
-                        self._next_runtime_flush = time.monotonic()+0.1
+                        self._next_runtime_flush = time.monotonic()+0.3
                     transient_db_errors = 0
                 except sqlite3.OperationalError as exc:
                     msg = str(exc).lower()

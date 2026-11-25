@@ -26,7 +26,8 @@ def copy_definitions(source, destination):
         store = SimulatorStore(staged)
         counts = {}
         try:
-            with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)) as src, store.connection() as dst:
+            with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True, timeout=10)) as src, store.connection() as dst:
+                src.execute("PRAGMA busy_timeout=10000")
                 src.execute("BEGIN")
                 dst.execute("BEGIN IMMEDIATE")
                 _RUNTIME_ONLY_TABLES = frozenset({
@@ -71,6 +72,13 @@ def copy_definitions(source, destination):
                     counts[name] = dst.executemany(
                         f"INSERT INTO {table} ({columns}) VALUES ({','.join('?' for _ in cols)})", read).rowcount
                 dst.commit()
+                # 显式截断 WAL 并切回单文件模式，避免 Windows 句柄滞留导致仅硬链接主文件时丢失已提交数据。
+                busy, log_frames, checkpointed = dst.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                if busy or log_frames != checkpointed:
+                    raise sqlite3.OperationalError(
+                        f"迁移库 WAL checkpoint 未完成: busy={busy}, log={log_frames}, checkpointed={checkpointed}"
+                    )
+                dst.execute("PRAGMA journal_mode=DELETE")
         finally:
             store.close()
         try:

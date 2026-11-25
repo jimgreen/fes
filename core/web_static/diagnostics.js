@@ -248,10 +248,10 @@
     $('refresh').disabled = true;
     try {
       const response = await fetch('/api/diagnostics' + (checks ? '?checks=1' : ''), {
-        cache: 'no-store',
+        cache: 'no-cache',
         signal: AbortSignal.timeout(12000),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) throw Error(data.error?.message || `HTTP ${response.status}`);
       $('diag-title').textContent = `scdfe_${data.component} · 分段耗时与配置检查`;
       $('note').textContent = data.note;
@@ -361,7 +361,42 @@
       if (pendingCheck) { pendingCheck = false; load(true); }
     }
   }
-  $('refresh').onclick = () => load(true);
+  let auditBusy = false;
+  async function loadAudit() {
+    if (auditBusy || !$('audit-rows')) return;
+    auditBusy = true;
+    if ($('audit-refresh')) $('audit-refresh').disabled = true;
+    try {
+      const q = $('audit-query')?.value?.trim() || '';
+      const params = new URLSearchParams({ limit: '100' });
+      if (q) params.set('q', q);
+      const resp = await fetch('/api/operation-audit?' + params, { cache: 'no-cache', signal: AbortSignal.timeout(12000) });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw Error(data.error?.message || `HTTP ${resp.status}`);
+      const items = data.items || [];
+      setBadge('badge-audit', items.length);
+      setHTML('audit-rows', items.map(x =>
+        `<tr><td class="mono">${esc(String(x.time || '').replace('T', ' ').slice(0, 23))}</td>` +
+        `<td><strong>${esc(x.phase)}</strong></td>` +
+        `<td class="mono">${esc([x.method, x.path].filter(Boolean).join(' ') || '—')}${x.remote ? `<small> · ${esc(x.remote)}</small>` : ''}</td>` +
+        `<td class="col-num">${esc(x.status ?? '—')}</td>` +
+        `<td title="${esc(x.summary)}">${esc(x.summary || '—')}</td></tr>`
+      ).join('') || '<tr><td colspan="5" class="muted">暂无操作审计记录</td></tr>');
+      if ($('audit-status')) $('audit-status').textContent = `共 ${items.length} 条 · ${new Date().toLocaleTimeString()}`;
+    } catch (e) {
+      if ($('audit-status')) $('audit-status').textContent = e.message;
+    } finally {
+      auditBusy = false;
+      if ($('audit-refresh')) $('audit-refresh').disabled = false;
+    }
+  }
+  if ($('audit-refresh')) $('audit-refresh').onclick = loadAudit;
+  if ($('audit-query')) {
+    let auditTimer;
+    $('audit-query').oninput = () => { clearTimeout(auditTimer); auditTimer = setTimeout(loadAudit, 250); };
+  }
+  document.querySelector('[data-diag-tab="audit"]')?.addEventListener('click', loadAudit);
+  $('refresh').onclick = () => { load(true); if (document.querySelector('[data-diag-tab="audit"].is-active')) loadAudit(); };
   setInterval(() => { if (!document.hidden && $('auto').checked) load(); }, 5000);
   load(true);
 })();

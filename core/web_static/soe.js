@@ -38,7 +38,7 @@
     if (r.channel_id && lastComponent) {
       const link = document.createElement('a');
       link.href = lastComponent === 'c'
-        ? `/#logs`
+        ? `/?log_channel=${encodeURIComponent(r.channel_id)}#logs`
         : `/logs${lastComponent === 't' ? '.html' : ''}?channel_id=${encodeURIComponent(r.channel_id)}`;
       link.textContent = ' 日志↗';
       link.title = '查看通道日志';
@@ -113,9 +113,9 @@
     const select = $('rtu');
     if (!select || select.tagName !== 'SELECT') return;
     try {
-      const response = await fetch('/api/command-options', { cache: 'no-store' });
+      const response = await fetch('/api/command-options', { cache: 'no-cache' });
       if (!response.ok) return;
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       const current = select.value;
       const frag = document.createDocumentFragment();
       const all = document.createElement('option');
@@ -149,9 +149,9 @@
       if ($('rtu').value) q.set('rtu_id', $('rtu').value);
       if (tail) q.set('tail', '1');
       else q.set('after_id', String(after));
-      const response = await fetch('/api/soe?' + q, { cache: 'no-store', signal: controller?.signal });
-      const data = await response.json();
-      if (!response.ok) throw Error(data.error?.message || '读取失败');
+      const response = await fetch('/api/soe?' + q, { cache: 'no-cache', signal: controller?.signal });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw Error(data.error?.message || `HTTP ${response.status}`);
       if (version !== generation) return;
       const wasInitial = initial;
       initial = false;

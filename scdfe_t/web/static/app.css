@@ -38,3 +38,12 @@ dialog#editor form{display:flex;flex-direction:column;max-height:88vh;overflow:h
 .workbench .points-panel:has(> #point-trend > .point-trend[open]) .point-pages { min-height:72px; }
 .top-nav{display:flex;gap:4px;background:var(--bg-surface,#fff);border-bottom:var(--border,1px solid #dce5e8);padding:8px 12px;margin-bottom:12px;border-radius:var(--radius-card,8px)}.top-nav a{color:var(--text-primary,#173f4b);text-decoration:none;padding:8px 14px;border-radius:var(--radius-btn,5px)}.top-nav a:hover,.top-nav a.active{background:var(--accent-soft,#e6f4f5);color:var(--accent,#087f8c);font-weight:600}.status-badge{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--bg-subtle,#edf1f3);color:var(--text-secondary,#52636b);font-size:12px}.status-badge.running{background:var(--ok-soft,#def7e8);color:var(--ok,#087443)}.status-badge.error{background:var(--danger-soft,#ffe3e3);color:var(--danger,#ad2931)}
 tr.selected{background:var(--bg-selected,#e8f6f7)}
+.batch-addr-bar{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;padding:8px 10px;border:1px solid var(--border-color,#c9d8dd);border-radius:var(--radius-input,7px);background:var(--bg-subtle,#f7fafb)}
+.batch-addr-bar>label{display:grid;gap:4px;font-size:12px;min-width:110px}
+.batch-addr-bar>label input,.batch-addr-bar>label select{height:32px!important;min-height:32px!important;padding:4px 8px!important}
+.batch-addr-bar .batch-check{display:inline-flex!important;align-items:center;gap:5px;min-width:auto;height:32px;white-space:nowrap}
+.batch-addr-bar .batch-check input{width:auto!important;height:auto!important;min-height:auto!important}
+.batch-addr-bar>button{height:32px;padding:0 10px;font-size:12px;white-space:nowrap}
+.batch-preview{flex:1 1 100%;font-size:12px;color:var(--text-secondary,#52636b);padding-top:2px}
+.batch-preview.is-ok{color:var(--ok,#087443);font-weight:600}
+.batch-preview.is-conflict{color:var(--danger,#ad2931);font-weight:600}

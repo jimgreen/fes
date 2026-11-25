@@ -282,7 +282,8 @@ class ScadaStore:
             connection.execute("PRAGMA foreign_keys=ON")
             connection.execute("PRAGMA synchronous=NORMAL")
             connection.execute("PRAGMA busy_timeout=30000")
-            connection.execute("PRAGMA mmap_size=1073741824")
+            connection.execute("PRAGMA cache_size=-16000")
+            connection.execute("PRAGMA mmap_size=67108864")
             connection.execute("PRAGMA temp_store=MEMORY")
         except BaseException:
             connection.close()
@@ -520,6 +521,15 @@ class ScadaStore:
                                     '请重新初始化数据库'
                                 )
                             self._ensure_indexes(connection, name, payload)
+                    # 非侵入式平滑补齐高频查询缺失索引（不改变 _scada_schema 表指纹，兼顾新旧生产库无缝启动）。
+                    if "fes_rtu_define" in expected_tables:
+                        connection.execute(
+                            "CREATE INDEX IF NOT EXISTS _scada_rtu_channel_id ON fes_rtu_define(channel_id)"
+                        )
+                    if "fes_channel_modbus_define" in expected_tables:
+                        connection.execute(
+                            "CREATE INDEX IF NOT EXISTS _scada_modbus_def_channel_id ON fes_channel_modbus_define(channel_id)"
+                        )
                     self._ensure_definition_version_triggers(connection, self.catalog)
                     self._ensure_command_version_triggers(connection)
                     self._ensure_point_refresh_triggers(connection)

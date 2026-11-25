@@ -93,7 +93,7 @@ def _parse_bool(value):
 
 
 def _coerce_point_value(value, data_type):
-    if data_type in (None, ""):
+    if value is None or data_type in (None, ""):
         return value
     kind = str(data_type).strip().lower()
     if kind in {"bool", "boolean"}:
@@ -348,17 +348,19 @@ class _OpcUaProtocol(PacketTrace):
 
     def close(self):
         with self._lock:
-            if self._backend is not None:
-                result = getattr(self._backend, "close", lambda: None)()
-                if asyncio.iscoroutine(result):
-                    asyncio.run(result)
-            elif self._loop_thread is not None:
-                try:
-                    self._loop_thread.call(self._close_backend, timeout=self.timeout)
-                finally:
-                    self._loop_thread.close()
-                    self._loop_thread = None
-            self._connected = False
+            try:
+                if self._backend is not None:
+                    result = getattr(self._backend, "close", lambda: None)()
+                    if asyncio.iscoroutine(result):
+                        asyncio.run(result)
+                elif self._loop_thread is not None:
+                    try:
+                        self._loop_thread.call(self._close_backend, timeout=self.timeout)
+                    finally:
+                        self._loop_thread.close()
+                        self._loop_thread = None
+            finally:
+                self._connected = False
 
     def __enter__(self):
         return self.connect()
@@ -417,8 +419,9 @@ class _OpcUaProtocol(PacketTrace):
             for item in data:
                 if item.StatusCode is None:
                     raise OpcError("OPC UA 读取未返回状态码")
-                item.StatusCode.check()
-                results.append((item.Value.Value, item.StatusCode, received))
+                # 单点坏品质（如 BadSensorFailure）通过 StatusCode 透传给上层质量位，避免整批健康测点被连带丢弃。
+                val = item.Value.Value if getattr(item, "Value", None) is not None else None
+                results.append((val, item.StatusCode, received))
             offset += len(chunk)
         return results
 

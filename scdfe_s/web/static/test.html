@@ -22,7 +22,7 @@
           </div>
           <div class="test-actions">
             <button id="service-start" class="primary" type="button" disabled>启动规约服务</button>
-            <button id="service-stop" type="button" disabled>停止规约服务</button>
+            <button id="service-stop" class="danger" type="button" disabled>停止规约服务</button>
             <button id="service-poll" type="button" disabled>立即采集</button>
             <button id="test-refresh" type="button">刷新</button>
             <span id="test-refresh-status" class="refresh-status" role="status" aria-live="polite">等待刷新</span>
@@ -56,7 +56,28 @@
           <button class="page-tab" type="button" data-point-tab="yk" aria-selected="false">遥控 YK</button>
           <button class="page-tab" type="button" data-point-tab="yt" aria-selected="false">遥调 YT</button>
           <input id="point-search" class="point-name-filter" type="search" placeholder="按名称过滤测点" aria-label="按名称过滤测点" autocomplete="off">
-        </nav><button id="points-refresh" type="button">刷新</button></div>
+        </nav><div class="point-toolbar-right"><button id="sim-toggle" type="button" aria-expanded="false">自动仿真激励</button><button id="points-refresh" type="button">刷新</button></div></div>
+        <div id="sim-bar" class="sim-bar" hidden>
+          <select id="sim-target" aria-label="仿真目标测点"><option value="">选择当前页 YC/YX 测点</option></select>
+          <select id="sim-wave" aria-label="仿真波形">
+            <option value="sine">正弦波</option>
+            <option value="ramp">三角斜坡</option>
+            <option value="random">随机抖动</option>
+            <option value="toggle">YX 周期翻转</option>
+          </select>
+          <label class="sim-num">基准<input id="sim-base" type="number" step="any" value="50"></label>
+          <label class="sim-num">幅值<input id="sim-amp" type="number" step="any" value="10"></label>
+          <select id="sim-interval" aria-label="激励周期">
+            <option value="1000">1 秒</option>
+            <option value="2000" selected>2 秒</option>
+            <option value="3000">3 秒</option>
+            <option value="5000">5 秒</option>
+            <option value="10000">10 秒</option>
+          </select>
+          <button id="sim-start" type="button" class="primary">开始激励</button>
+          <button id="sim-stop" type="button" class="danger" disabled>停止</button>
+          <span id="sim-status" class="muted">未运行</span>
+        </div>
         <div id="point-panels" class="point-pages">
           <section data-point-panel="yc"><div class="table-wrap"><table><thead><tr><th>点号</th><th>名称</th><th>当前值</th><th>状态</th><th>原始状态</th><th>刷新时间</th><th>操作</th></tr></thead><tbody data-point-body="yc"><tr><td colspan="7" class="muted">请选择 RTU</td></tr></tbody></table></div><div class="table-pager" data-point-pager="yc"></div></section>
           <section data-point-panel="yx" hidden><div class="table-wrap"><table><thead><tr><th>点号</th><th>名称</th><th>当前值</th><th>状态</th><th>刷新时间</th><th>操作</th></tr></thead><tbody data-point-body="yx"><tr><td colspan="6" class="muted">请选择 RTU</td></tr></tbody></table></div><div class="table-pager" data-point-pager="yx"></div></section>

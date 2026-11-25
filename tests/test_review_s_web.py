@@ -73,10 +73,38 @@ for (const match of html.matchAll(/<(input|select|button|form|div|section|tbody|
   if (a.id) nodes.set(a.id, node);
   if (a['data-field']) fields.set(a['data-field'], node);
 }
+const dynamicNodes = new Map();
 const document = {
-  body:{dataset:{protocol:input.slug}}, hidden:false, activeElement:null,
+  body:{
+    dataset:{protocol:input.slug},
+    append(el) { if (el && el.id) dynamicNodes.set(el.id, el); },
+  },
+  hidden:false, activeElement:null,
+  getElementById(id) { return dynamicNodes.get(id) || nodes.get(id) || null; },
+  createElement(tag) {
+    const el = {
+      tagName:String(tag).toUpperCase(), id:'', className:'', open:false, _children:{},
+      set innerHTML(_html) {
+        const inputEl = { value:String(input.prompt ?? '1'), focus() {} };
+        const formEl = { onsubmit:null };
+        const cancelEl = { onclick:null };
+        this._children = { '#pv-input':inputEl, '#pv-form':formEl, '#pv-cancel':cancelEl };
+      },
+      querySelector(sel) { return this._children[sel] || null; },
+      showModal() {
+        this.open = true;
+        if (input.prompt === null) {
+          this._children['#pv-cancel']?.onclick?.();
+        } else if (this._children['#pv-form']?.onsubmit) {
+          this._children['#pv-form'].onsubmit({ preventDefault() {} });
+        }
+      },
+      close() { this.open = false; },
+    };
+    return el;
+  },
   querySelector(selector) {
-    if (selector.startsWith('#')) return nodes.get(selector.slice(1)) || null;
+    if (selector.startsWith('#')) return dynamicNodes.get(selector.slice(1)) || nodes.get(selector.slice(1)) || null;
     const field = selector.match(/^\[data-field=['"]([^'"]+)['"]\]$/);
     return field ? fields.get(field[1]) || null : null;
   },

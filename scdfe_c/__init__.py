@@ -90,15 +90,16 @@ RTU_AUTO_COMMUNICATION_ON = 1
 RTU_AUTO_COMMUNICATION_OFF = 0
 BATCH_WRITER_STOP = "__scdfe_c_batch_writer_stop__"
 BATCH_WRITER_DRAIN = "__scdfe_c_batch_writer_drain__"
+BATCH_WRITER_WAKE = "__scdfe_c_batch_writer_wake__"
 BATCH_WRITER_INTERVAL = 0.1
 BATCH_WRITER_MAX_BATCH = 500
 BATCH_WRITER_WAL_AUTOCHECKPOINT = 10000
 # SQLite has one WAL writer. Web edits, scdfe_t and the command service can
 # briefly hold that lock; a transient busy result must not kill the dedicated
 # writer process or lose the batch that is waiting to be committed.
-BATCH_WRITER_LOCK_RETRIES = 8
-BATCH_WRITER_LOCK_BACKOFF = 0.2
-BATCH_WRITER_BUSY_TIMEOUT_MS = 1000
+BATCH_WRITER_LOCK_RETRIES = 4
+BATCH_WRITER_LOCK_BACKOFF = 0.12
+BATCH_WRITER_BUSY_TIMEOUT_MS = 300
 PROCESS_LOG_INTERVAL = 30.0
 LOG_CLEANUP_INTERVAL = 60.0
 WORKER_HEARTBEAT_INTERVAL = 5.0
@@ -521,6 +522,9 @@ def _prefetch_batch(queue, pending, updates, max_batch):
         if updates>=max_batch:break
         try:message=queue.get_nowait()
         except Empty:break
+        if message == BATCH_WRITER_WAKE:
+            queue.task_done()
+            continue
         if message==BATCH_WRITER_STOP or (isinstance(message,tuple) and len(message)==2 and message[0]==BATCH_WRITER_DRAIN):
             return updates,message
         pending.append(message);updates+=_batch_message_size(message)
@@ -621,8 +625,17 @@ def _batch_writer_entry(
                 f"输入更新数={completed_updates} 待写消息={len(pending)} "
                 f"待写更新={pending_updates}")
 
+    def _wake_writer() -> None:
+        try:
+            queue.put_nowait(BATCH_WRITER_WAKE)
+        except Exception:
+            pass
+
+    logger_session = None
     try:
-        store = ScadaStore(db_path, schema_dir)
+        logger_session = logger.session()
+        logger_session.__enter__()
+        store = ScadaStore(db_path, schema_dir, connection_pool_size=2)
         from core.pipeline_metrics import LatencyStats,SlowBatchStats
         store._writer_latency = LatencyStats()
         store._writer_slow = SlowBatchStats()
@@ -644,7 +657,7 @@ def _batch_writer_entry(
         # it has claimed the writer identity.  A duplicate process therefore
         # cannot replace a live process' endpoint metadata while starting.
         ipc_requests = ThreadQueue(maxsize=1000)
-        ipc_server = WriterIpcServer(db_path, ipc_requests).start()
+        ipc_server = WriterIpcServer(db_path, ipc_requests, on_enqueue=_wake_writer).start()
         lease.heartbeat(force=True)
         if ready is not None:
             ready.set()
@@ -682,9 +695,10 @@ def _batch_writer_entry(
                         # 该请求已因客户端超时而原子取消，严禁继续落库引发误控。
                         continue
                     try:
-                        ipc_request.response = {"ok": True, "item": _writer_submit_command(
-                            store, connection, ipc_request.payload,
-                        )}
+                        with store.connection() as ipc_con:
+                            ipc_request.response = {"ok": True, "item": _writer_submit_command(
+                                store, ipc_con, ipc_request.payload,
+                            )}
                     except sqlite3.OperationalError as exc:
                         ipc_request.response = {
                             "ok": False, "error": str(exc), "code": "writer_locked", "status": 503,
@@ -710,6 +724,9 @@ def _batch_writer_entry(
                     continue
                 if not flush_result:
                     raise RuntimeError("批量写数据库失败，写库进程退出等待监督器重建")
+                continue
+            if message == BATCH_WRITER_WAKE:
+                queue.task_done()
                 continue
             if (isinstance(message, tuple) and len(message) == 2
                     and message[0] == BATCH_WRITER_DRAIN):
@@ -799,6 +816,11 @@ def _batch_writer_entry(
             except (OSError, sqlite3.Error):
                 pass
         logger.process(f"批量数据库写入进程停止: {summary()}")
+        if logger_session is not None:
+            try:
+                logger_session.__exit__(None, None, None)
+            except Exception:
+                pass
         if lease is not None:
             lease.finish(failure)
 
@@ -1380,16 +1402,34 @@ class ChannelWorker:
                         quality_value = int(getattr(quality, "value", quality or 0))
                     except (TypeError, ValueError):
                         quality_value = 0
+                    is_good_fn = getattr(quality, "is_good", None)
+                    if callable(is_good_fn) and not is_good_fn():
+                        quality_value |= 128
                 cache_key = (kind, point_no)
                 previous = candidate_cache.get(cache_key)
                 if previous is None:
                     previous = cached_state(cache_key)
                 if kind == "yc":
-                    raw_value = float(value)
-                    base, scale = scaling.get(point_no, (0.0, 1.0))
-                    engineering_value = base + scale * raw_value
-                    if not math.isfinite(raw_value) or not math.isfinite(engineering_value):
-                        raise ValueError(f"YC {point_no} 原始值或工程值不是有限数")
+                    if value is None:
+                        # OPC UA 等协议单点坏品质可能返回 None；保留上次值并置无效质量位，避免炸毁整批采集。
+                        quality_value |= 128
+                        if previous is not None:
+                            raw_value, engineering_value = previous[:2]
+                        else:
+                            row = self._read_connection().execute(
+                                "SELECT raw_value, value FROM fes_yc_define WHERE rtu_id=? AND pnt_no=?",
+                                (self.spec.rtu_id, point_no),
+                            ).fetchone()
+                            if row is None:
+                                continue
+                            raw_value = float(row["raw_value"] if row["raw_value"] is not None else (row["value"] or 0.0))
+                            engineering_value = float(row["value"] if row["value"] is not None else raw_value)
+                    else:
+                        raw_value = float(value)
+                        base, scale = scaling.get(point_no, (0.0, 1.0))
+                        engineering_value = base + scale * raw_value
+                        if not math.isfinite(raw_value) or not math.isfinite(engineering_value):
+                            raise ValueError(f"YC {point_no} 原始值或工程值不是有限数")
                 elif value is None:
                     # IEC104 double-point intermediate/indeterminate states
                     # have no Boolean value. Preserve the last business value
@@ -1524,6 +1564,70 @@ class ChannelWorker:
             self._close_command_connection()
             raise
 
+    @staticmethod
+    def _parse_yk_bool(raw_value: Any) -> bool:
+        """严格解析遥控布尔值，避免 '0'/'false' 等字符串被 bool() 误判为合闸。"""
+        if isinstance(raw_value, bool):
+            return raw_value
+        if isinstance(raw_value, (int, float)):
+            if not math.isfinite(raw_value):
+                raise ValueError(f"遥控值非有限数: {raw_value!r}")
+            if raw_value in (0, 1):
+                return bool(int(raw_value))
+            raise ValueError(f"遥控值仅允许 0/1，实际收到: {raw_value!r}")
+        if isinstance(raw_value, str):
+            text = raw_value.strip().lower()
+            if text in {"1", "true", "on", "close"}:
+                return True
+            if text in {"0", "false", "off", "open"}:
+                return False
+        raise ValueError(f"无法解析遥控布尔值: {raw_value!r}")
+
+    def _resolve_modbus_yk_current_value(self, point_no: int) -> int | None:
+        """为 Modbus 特殊位遥控（ytyk_type=7）解析目标 16 位寄存器当前值。"""
+        point_def_fn = getattr(self._master, "_point_definition", None)
+        if not callable(point_def_fn):
+            return None
+        try:
+            definition = point_def_fn(point_no, None, 1)
+        except Exception:
+            return None
+        if definition is None:
+            return None
+        get_f = definition.get if isinstance(definition, Mapping) else lambda k, d=None: getattr(definition, k, d)
+        if int(get_f("ytyk_type") or 0) != 7:
+            return None
+        yc_cnt = get_f("special_yk_yccnt")
+        if yc_cnt is not None:
+            try:
+                yc_no = int(yc_cnt)
+                cached = self._measurement_cache.get(("yc", yc_no))
+                if cached is not None and cached[0] is not None:
+                    return int(round(float(cached[0]))) & 0xFFFF
+                if self.store is not None:
+                    row = self._read_connection().execute(
+                        "SELECT raw_value, value FROM fes_yc_define WHERE rtu_id=? AND pnt_no=?",
+                        (self.spec.rtu_id, yc_no),
+                    ).fetchone()
+                    if row is not None:
+                        val = row["raw_value"] if row["raw_value"] is not None else row["value"]
+                        if val is not None:
+                            return int(round(float(val))) & 0xFFFF
+            except (TypeError, ValueError):
+                pass
+        # 兜底直接从设备读对应保持寄存器 1 个字
+        read_holding = getattr(self._master, "read_holding_registers", None)
+        if callable(read_holding):
+            from client.modbus_tcp import resolve_address
+            reg_addr = get_f("reg_addr")
+            if reg_addr is not None:
+                addr = resolve_address(int(reg_addr), get_f("address_base", 0), name="reg_addr")
+                unit_id = get_f("irtuaddr")
+                regs = read_holding(addr, 1, unit_id=unit_id if unit_id is not None else getattr(self._master, "unit_id", 1))
+                if regs:
+                    return int(regs[0]) & 0xFFFF
+        return None
+
     def _send_command(self, kind: str, row: Mapping[str, Any]) -> Any:
         if self._master is None:
             raise RuntimeError("主站尚未建立")
@@ -1533,7 +1637,12 @@ class ChannelWorker:
                 raise NotImplementedError(
                     f"{self.spec.channel_type} 主站没有遥控下发 API；请配置该规约的应用层命令映射"
                 )
-            return self._master.send_yk_point(point_no, bool(row.get("value", 0)))
+            close = self._parse_yk_bool(row.get("value", 0))
+            if self.spec.channel_type in {"modbus-tcp", "modbus-rtu"}:
+                current_value = self._resolve_modbus_yk_current_value(point_no)
+                if current_value is not None:
+                    return self._master.send_yk_point(point_no, close, current_value=current_value)
+            return self._master.send_yk_point(point_no, close)
         if not callable(getattr(self._master, "send_yt_point", None)):
             raise NotImplementedError(
                 f"{self.spec.channel_type} 主站没有遥调下发 API；请配置该规约的应用层命令映射"
@@ -1593,6 +1702,21 @@ class ChannelWorker:
             try:
                 command_id = claim(self.store,self.spec.rtu_id,kind,point_no,
                                    int(row.get('cmd_time') or 0),row.get('value'))
+            except ValueError as exc:
+                # 确定性配置/参数校验错误（如回采规则预期值溢出）仅隔离单条命令，避免触发整站断连重连死循环。
+                self._command_seen[key] = current
+                self.stats.errors += 1
+                table = "fes_yk_define" if kind == "yk" else "fes_yt_define"
+                fail_now = max(_now_ms(), int(row.get("cmd_time") or 0))
+                fail_values = {"status": 3, "cmd_handle_time": fail_now}
+                try:
+                    self._write_row(table, self.spec.rtu_id, point_no, fail_values)
+                    self._pending_command_acks.pop(key, None)
+                except Exception as ack_exc:  # noqa: BLE001
+                    self._pending_command_acks[key] = (table, point_no, fail_values)
+                    self.logger.error(f"写入指令校验失败状态异常: {ack_exc}")
+                self.business.event('指令登记校验失败已隔离', 四遥=kind.upper(), 点号=point_no, 错误=str(exc))
+                continue
             except Exception:
                 self._command_version = None
                 raise

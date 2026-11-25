@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="minimalist-light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>全链路对账 · SCADA</title>
+  <link rel="stylesheet" href="/static/point-trace.css">
+  <link rel="stylesheet" href="/static/ui-theme.css">
+  <script defer src="/static/ui-i18n.js"></script>
+  <script defer src="/static/point-trace.js"></script>
+</head>
+<body data-point-trace="1">
+  <header><strong>SCADA · 全链路对账</strong><a href="/">返回工作台</a></header>
+  <main>
+    <section class="pt-shell" aria-label="全链路测点对账">
+      <div class="pt-toolbar">
+        <div class="pt-kind-tabs" role="tablist" aria-label="四遥类型">
+          <button type="button" class="pt-kind-btn is-active" role="tab" aria-selected="true" data-kind="yc">遥测 YC</button>
+          <button type="button" class="pt-kind-btn" role="tab" aria-selected="false" data-kind="yx">遥信 YX</button>
+          <button type="button" class="pt-kind-btn" role="tab" aria-selected="false" data-kind="yk">遥控 YK</button>
+          <button type="button" class="pt-kind-btn" role="tab" aria-selected="false" data-kind="yt">遥调 YT</button>
+        </div>
+        <select id="pt-rtu" class="pt-select" aria-label="筛选 RTU"><option value="">全部 RTU</option></select>
+        <input id="pt-query" class="pt-search" type="search" maxlength="120" placeholder="点号 / 名称 / RTU" aria-label="检索点号或名称" autocomplete="off">
+        <label class="pt-check"><input id="pt-mapped-only" type="checkbox"><span>仅看已映射</span></label>
+        <label class="pt-check"><input id="pt-auto" type="checkbox" checked><span>5 秒刷新</span></label>
+        <button id="pt-refresh" type="button" class="primary">刷新</button>
+        <div class="pt-summary" id="pt-summary" role="status" aria-live="polite">加载中…</div>
+      </div>
+
+      <div class="pt-table-wrap">
+        <table class="pt-table">
+          <thead>
+            <tr>
+              <th>RTU / 源通道</th>
+              <th>点号 / 名称</th>
+              <th class="col-num">采集值</th>
+              <th>采集状态 / 时刻</th>
+              <th>转发通道 / 规约</th>
+              <th>转发点号 / 目标地址</th>
+              <th class="col-num">转发值 / 时刻</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="pt-tbody">
+            <tr><td colspan="8" class="pt-empty">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pt-footer">
+        <span id="pt-foot-info" class="muted">—</span>
+        <div class="pt-pager">
+          <button id="pt-prev" type="button" disabled>上一页</button>
+          <span id="pt-page-label" class="muted">1 / 1</span>
+          <button id="pt-next" type="button" disabled>下一页</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="pt-cmd-dialog" class="pt-dialog" aria-labelledby="pt-cmd-title">
+    <form id="pt-cmd-form" method="dialog">
+      <div class="pt-dialog-head">
+        <h3 id="pt-cmd-title">快捷下发指令</h3>
+        <button type="button" id="pt-cmd-close" aria-label="关闭">×</button>
+      </div>
+      <div class="pt-dialog-body">
+        <div id="pt-cmd-meta" class="muted"></div>
+        <label>目标值
+          <input id="pt-cmd-value" type="number" step="any" required>
+        </label>
+        <p id="pt-cmd-error" class="pt-error" role="alert"></p>
+      </div>
+      <div class="pt-dialog-foot">
+        <button type="button" id="pt-cmd-cancel">取消</button>
+        <button type="submit" class="primary" id="pt-cmd-submit">确认下发</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

@@ -91,8 +91,11 @@ class OwnedRequestHandler(ServerRequestHandler):
                     function = packet[7] if len(packet) > 7 else (exc.fcode or 0)
                     code = (ExcCodes.ILLEGAL_VALUE if function in self.server.decoder.pdu_table
                             else ExcCodes.ILLEGAL_FUNCTION)
+                    # 直接从原始 MBAP 报头提取事务号与站号，防止 exc 缺失时回复 TID=0 导致主站丢弃超时。
+                    tid = int.from_bytes(packet[0:2], "big") if len(packet) >= 2 else (exc.transaction_id or 0)
+                    unit_id = packet[6] if len(packet) >= 7 else (exc.dev_id or 0)
                     response = ExceptionResponse(function, code,
-                                                 device_id=exc.dev_id, transaction=exc.transaction_id)
+                                                 device_id=unit_id, transaction=tid)
                     self.server_send(response, addr)
                     consumed += len(packet)
                 else:

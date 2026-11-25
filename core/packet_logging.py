@@ -282,14 +282,32 @@ class DatabasePacketLogSwitch:
             legacy = self._legacy_policy()
             persisted = False
             try:
-                with closing(sqlite3.connect(self.db_path, timeout=10)) as con:
-                    cursor = con.execute(
-                        f"UPDATE {self.table} SET packet_recording=?, _version=_version+1 WHERE channel_id=?",
-                        (None if enabled is None else (1 if enabled else 0), key),
-                    )
-                    persisted = cursor.rowcount == 1
-                    if persisted:
-                        con.commit()
+                for attempt in range(4):
+                    with closing(sqlite3.connect(self.db_path, timeout=10, isolation_level=None)) as con:
+                        con.execute("PRAGMA busy_timeout=5000")
+                        try:
+                            con.execute("BEGIN IMMEDIATE")
+                            cursor = con.execute(
+                                f"UPDATE {self.table} SET packet_recording=?, _version=_version+1 WHERE channel_id=?",
+                                (None if enabled is None else (1 if enabled else 0), key),
+                            )
+                            persisted = cursor.rowcount >= 1
+                            if persisted:
+                                con.commit()
+                            else:
+                                con.rollback()
+                            break
+                        except sqlite3.OperationalError as exc:
+                            if con.in_transaction:
+                                con.rollback()
+                            msg = str(exc).lower()
+                            if "no such table" in msg:
+                                persisted = False
+                                break
+                            if attempt < 3 and ("locked" in msg or "busy" in msg):
+                                time.sleep(0.05 * (attempt + 1))
+                                continue
+                            raise
             except sqlite3.OperationalError as exc:
                 if "no such table" not in str(exc).lower():
                     raise

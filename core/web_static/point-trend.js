@@ -943,8 +943,8 @@
       const database = await window.scadaDatabaseReady;
       const headers = new Headers(options?.headers);
       if (database?.token) headers.set('X-Scada-Database', database.token);
-      const response = await fetch(HISTORY_URL + path, {...options, headers, cache:'no-store'});
-      const result = await response.json();
+      const response = await fetch(HISTORY_URL + path, {...options, headers, cache:'no-cache'});
+      const result = await response.json().catch(() => ({}));
       if (!response.ok) {
         databaseChanged = result.error?.code === 'database_changed';
         throw new Error(result.error?.message || '曲线请求失败（HTTP ' + response.status + '）');

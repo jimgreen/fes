@@ -1898,3 +1898,55 @@ dialog::backdrop {
     scroll-behavior: auto !important;
   }
 }
+.batch-ops-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--bg-subtle, #f1f5f9);
+  font-size: 12px;
+}
+.batch-ops-bar[hidden] { display: none !important; }
+th.col-check, td.col-check {
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  text-align: center;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+tr.is-batch-selected td {
+  background: var(--accent-soft, rgba(8, 127, 140, 0.08));
+}
+.scdfe-core-procs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.scdfe-core-procs[hidden] { display: none !important; }
+.core-proc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill, 999px);
+  border: 1px solid var(--border-color, #cbd5e1);
+  background: var(--bg-surface, #fff);
+  font-size: 12px;
+}
+.core-proc-chip .core-proc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--muted, #94a3b8);
+}
+.core-proc-chip.is-ok .core-proc-dot { background: var(--ok, #16a34a); }
+.core-proc-chip.is-err .core-proc-dot { background: var(--danger, #dc2626); }
+.core-proc-chip .row-button {
+  padding: 1px 6px;
+  font-size: 11px;
+}

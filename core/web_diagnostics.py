@@ -4,6 +4,9 @@ import time
 
 
 def handle_diagnostics(handler, parts, query, method, store, component):
+    from core.web_ux_api import handle_ux_api
+    if handle_ux_api(handler, parts, query, method, store, component) is not False:
+        return
     from scdfe_c.web.service import ApiError
     allowed = (['diagnostics'],['api','diagnostics'],['static','diagnostics.css'],['static','diagnostics.js'])
     if parts not in allowed:

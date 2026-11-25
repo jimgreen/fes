@@ -421,6 +421,12 @@ class _ModbusTcpTransport(_ModbusOperations):
                                异常码=getattr(last_error, 'exception_code', None))
                 if getattr(last_error, 'exception_code', None) in {1, 2, 3}:
                     break
+                # 通信超时或 OSError 可能在 TCP 缓冲区遗留延迟响应，主动关闭脏连接防止后续错帧。
+                if getattr(last_error, 'exception_code', None) is None and self.connected:
+                    try:
+                        self.native.close()
+                    except OSError:
+                        pass
                 if attempt < attempts - 1 and not self.connected:
                     self._business('Modbus断线重连', 链路=self._packet_endpoint, 错误=str(last_error))
                     if not self._open_native():

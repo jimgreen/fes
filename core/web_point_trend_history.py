@@ -181,9 +181,53 @@ class PointTrendHistory:
             except FileExistsError:
                 pass
             self._check_path(self.path)
-        with closing(sqlite3.connect(self.path.as_uri() + '?mode=rw', uri=True, timeout=3)) as con, con:
-            self._configure_connection(con, create=create)
-            yield con
+        if not create:
+            # 纯读路径优先使用只读快照连接，若检测到旧版趋势库缺少 trend_point_sample，则先独立迁移再只读查询。
+            ro_uri = self.path.as_uri() + '?mode=ro'
+            with closing(sqlite3.connect(ro_uri, uri=True, timeout=3, isolation_level=None)) as ro_con:
+                ro_con.execute('PRAGMA trusted_schema=OFF')
+                ro_con.execute('PRAGMA busy_timeout=5000')
+                ro_con.execute('PRAGMA temp_store=MEMORY')
+                application_id = ro_con.execute('PRAGMA application_id').fetchone()[0]
+                if application_id != _APPLICATION_ID:
+                    raise ApiError(400, '曲线历史文件格式无效')
+                has_new = ro_con.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='trend_point_sample'"
+                ).fetchone() is not None
+            if not has_new:
+                with closing(sqlite3.connect(self.path.as_uri() + '?mode=rw', uri=True, timeout=5, isolation_level=None)) as rw_con:
+                    rw_con.execute('PRAGMA trusted_schema=OFF')
+                    rw_con.execute('PRAGMA busy_timeout=5000')
+                    rw_con.execute('PRAGMA temp_store=MEMORY')
+                    rw_con.execute('PRAGMA synchronous=NORMAL')
+                    rw_con.execute('BEGIN IMMEDIATE')
+                    try:
+                        self._ensure_point_sample_table(rw_con)
+                        rw_con.commit()
+                    except Exception:
+                        if rw_con.in_transaction:
+                            rw_con.rollback()
+                        raise
+            with closing(sqlite3.connect(ro_uri, uri=True, timeout=3, isolation_level=None)) as con:
+                con.execute('PRAGMA trusted_schema=OFF')
+                con.execute('PRAGMA busy_timeout=5000')
+                con.execute('PRAGMA temp_store=MEMORY')
+                try:
+                    yield con
+                finally:
+                    if con.in_transaction:
+                        con.rollback()
+            return
+        with closing(sqlite3.connect(self.path.as_uri() + '?mode=rw', uri=True, timeout=5, isolation_level=None)) as con:
+            try:
+                self._configure_connection(con, create=True)
+                yield con
+                if con.in_transaction:
+                    con.commit()
+            except Exception:
+                if con.in_transaction:
+                    con.rollback()
+                raise
 
     @staticmethod
     def _ensure_point_sample_table(con):
@@ -310,6 +354,17 @@ class PointTrendHistory:
     @staticmethod
     def _retained_point_rows(con, point_key, after_ms, retention_points):
         """读取单测点留存点数上限之内且晚于 after_ms 的样本，超上限时保首尾抽样。"""
+        if after_ms > 0:
+            # 增量轮询热路径：直接按主键索引范围取最多 min(retention_points, _MAX_RESULTS)+1 条，
+            # 未超限时跳过耗时的 OFFSET retention_points 与 COUNT(*) 扫描。
+            fast_cap = min(retention_points, _MAX_RESULTS)
+            fast_rows = con.execute(
+                'SELECT time_ms, value, quality, source_time_ms FROM trend_point_sample '
+                'WHERE point_key=? AND time_ms > ? ORDER BY time_ms LIMIT ?',
+                (point_key, after_ms, fast_cap + 1),
+            ).fetchall()
+            if len(fast_rows) <= fast_cap:
+                return fast_rows
         boundary = con.execute(
             'SELECT time_ms FROM trend_point_sample '
             'WHERE point_key=? ORDER BY time_ms DESC LIMIT 1 OFFSET ?',
@@ -405,6 +460,8 @@ class PointTrendHistory:
     def _run(self):
         lease = InstanceLock(self.path, 'point-trend')
         next_prune = 0.0
+        unvacuumed_rows = 0
+        last_vacuum = time.monotonic()
         next_scan = {}
         known_intervals = {}
         last_payload = None
@@ -500,18 +557,25 @@ class PointTrendHistory:
                                             'VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING',
                                             records,
                                         )
-                                        for point_key, item in due_items:
-                                            pruned_count += self._prune_point(
-                                                con, point_key, item['retention_points'],
-                                            )
+                                        # 小留存窗口开销极低保持即时裁剪；大留存窗口（>200）统一由低频 prune_due 批量裁剪，避免每秒百万行 OFFSET 扫描。
+                                        if not prune_due:
+                                            for point_key, item in due_items:
+                                                if item['retention_points'] <= 200:
+                                                    pruned_count += self._prune_point(
+                                                        con, point_key, item['retention_points'],
+                                                    )
                                     if prune_due:
                                         pruned_count += self._prune(con, settings)
-                                        next_prune = start + 15.0
+                                        next_prune = start + 30.0
                                 else:
                                     self._wake.set()
-                            if pruned_count > 0:
+                            unvacuumed_rows += pruned_count
+                            now_v = time.monotonic()
+                            if unvacuumed_rows >= 500 or (unvacuumed_rows > 0 and now_v - last_vacuum >= 120.0):
                                 try:
                                     con.execute('PRAGMA incremental_vacuum(200)')
+                                    unvacuumed_rows = 0
+                                    last_vacuum = now_v
                                 except sqlite3.Error:
                                     pass
                             last_payload = payload

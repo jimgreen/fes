@@ -678,9 +678,13 @@ class IEC104Server(PacketTrace):
             if kind not in ('yc', 'yx'):
                 raise ValueError('只有 yc/yx 监视量支持质量标志')
             quality = c104.Quality(quality)
-        point.value = self._as_value(kind, self._point_types.get(key), value)
-        if quality is not None:
-            point.quality = quality
+        native_val = self._as_value(kind, self._point_types.get(key), value)
+        if hasattr(point, 'set_sample'):
+            point.set_sample(native_val, quality)
+        else:
+            point.value = native_val
+            if quality is not None:
+                point.quality = quality
         if transmit and not point.transmit(self._cause(cause)):
             raise IEC104ServerError(f'点 {kind}/{point_no} 上送失败')
         return self._plain(point.value)

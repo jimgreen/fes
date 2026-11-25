@@ -592,19 +592,20 @@ class IEC104Master(PacketTrace):
             wire_type = 59 if wire_type == 58 else 46
         elif not double and wire_type in {46, 59}:
             wire_type = 58 if wire_type == 59 else 45
-        point = self._point('yk', point_no, data_type=wire_type)
-        mode = c104.CommandMode.SELECT_AND_EXECUTE if select_execute else c104.CommandMode.DIRECT
-        point.command_mode = mode
-        qoc = c104.Qoc.NONE if qualifier is None else (
-            qualifier if isinstance(qualifier, c104.Qoc) else c104.Qoc(int(qualifier)))
-        if double:
-            state = c104.Double.ON if bool(value) else c104.Double.OFF
-            point.info = c104.DoubleCmd(state=state, qualifier=qoc, recorded_at=recorded_at)
-        else:
-            point.info = c104.SingleCmd(on=bool(value), qualifier=qoc, recorded_at=recorded_at)
-        if not point.transmit(c104.Cot.ACTIVATION):
-            raise IEC104Error(f'遥控点 {point_no} 未被 c104 接受')
-        return self.value('yk', point_no)
+        with self._lock:
+            point = self._point('yk', point_no, data_type=wire_type)
+            mode = c104.CommandMode.SELECT_AND_EXECUTE if select_execute else c104.CommandMode.DIRECT
+            point.command_mode = mode
+            qoc = c104.Qoc.NONE if qualifier is None else (
+                qualifier if isinstance(qualifier, c104.Qoc) else c104.Qoc(int(qualifier)))
+            if double:
+                state = c104.Double.ON if bool(value) else c104.Double.OFF
+                point.info = c104.DoubleCmd(state=state, qualifier=qoc, recorded_at=recorded_at)
+            else:
+                point.info = c104.SingleCmd(on=bool(value), qualifier=qoc, recorded_at=recorded_at)
+            if not point.transmit(c104.Cot.ACTIVATION):
+                raise IEC104Error(f'遥控点 {point_no} 未被 c104 接受')
+            return self.value('yk', point_no)
 
     def _write_yt_command(self, point_no, value, *, data_type=None, qualifier=None,
                            recorded_at=None, cause=None):
@@ -616,29 +617,30 @@ class IEC104Master(PacketTrace):
         data_type = self._canonical_type_id('yt', data_type, field(definition, 'time_tag'))
         if qualifier is None:
             qualifier = field(definition, 'qualifier', 0)
-        point = self._point('yt', point_no, data_type=data_type)
-        mode = str(field(definition, 'command_mode', '') or '').upper()
-        point.command_mode = (c104.CommandMode.SELECT_AND_EXECUTE
-                              if (mode in {'SELECT_AND_EXECUTE', 'SELECT-AND-EXECUTE', 'SELECT'}
-                                  or (not mode and self.yt_execute_type == 1))
-                              else c104.CommandMode.DIRECT)
-        q = c104.UInt7(int(qualifier))
-        if data_type in {48, 61}:
-            point.info = c104.NormalizedCmd(
-                target=c104.NormalizedFloat(float(value)), qualifier=q,
-                recorded_at=recorded_at)
-        elif data_type in {49, 62}:
-            point.info = c104.ScaledCmd(
-                target=c104.Int16(int(value)), qualifier=q,
-                recorded_at=recorded_at)
-        elif data_type in {50, 63}:
-            point.info = c104.ShortCmd(target=float(value), qualifier=q,
-                                       recorded_at=recorded_at)
-        else:
-            raise ValueError(f'yt 不支持 data_type={data_type}')
-        if not point.transmit(c104.Cot.ACTIVATION if cause is None else cause):
-            raise IEC104Error(f'遥调点 {point_no} 未被 c104 接受')
-        return self.value('yt', point_no)
+        with self._lock:
+            point = self._point('yt', point_no, data_type=data_type)
+            mode = str(field(definition, 'command_mode', '') or '').upper()
+            point.command_mode = (c104.CommandMode.SELECT_AND_EXECUTE
+                                  if (mode in {'SELECT_AND_EXECUTE', 'SELECT-AND-EXECUTE', 'SELECT'}
+                                      or (not mode and self.yt_execute_type == 1))
+                                  else c104.CommandMode.DIRECT)
+            q = c104.UInt7(int(qualifier))
+            if data_type in {48, 61}:
+                point.info = c104.NormalizedCmd(
+                    target=c104.NormalizedFloat(float(value)), qualifier=q,
+                    recorded_at=recorded_at)
+            elif data_type in {49, 62}:
+                point.info = c104.ScaledCmd(
+                    target=c104.Int16(int(value)), qualifier=q,
+                    recorded_at=recorded_at)
+            elif data_type in {50, 63}:
+                point.info = c104.ShortCmd(target=float(value), qualifier=q,
+                                           recorded_at=recorded_at)
+            else:
+                raise ValueError(f'yt 不支持 data_type={data_type}')
+            if not point.transmit(c104.Cot.ACTIVATION if cause is None else cause):
+                raise IEC104Error(f'遥调点 {point_no} 未被 c104 接受')
+            return self.value('yt', point_no)
 
     @staticmethod
     def _converter_for(value):

@@ -319,17 +319,19 @@ class _BacnetProtocol(PacketTrace):
 
     def close(self):
         with self._lock:
-            if self._backend is not None:
-                result = getattr(self._backend, "close", lambda: None)()
-                if asyncio.iscoroutine(result):
-                    asyncio.run(result)
-            elif self._loop_thread is not None:
-                try:
-                    self._loop_thread.call(self._close_backend, timeout=self.timeout)
-                finally:
-                    self._loop_thread.close()
-                    self._loop_thread = None
-            self._connected = False
+            try:
+                if self._backend is not None:
+                    result = getattr(self._backend, "close", lambda: None)()
+                    if asyncio.iscoroutine(result):
+                        asyncio.run(result)
+                elif self._loop_thread is not None:
+                    try:
+                        self._loop_thread.call(self._close_backend, timeout=self.timeout)
+                    finally:
+                        self._loop_thread.close()
+                        self._loop_thread = None
+            finally:
+                self._connected = False
 
     def __enter__(self):
         return self.connect()
@@ -557,7 +559,11 @@ class BacnetMaster(_BacnetProtocol):
         return matches[0]
 
     def collect_once(self, points=None):
-        rows = self._points if points is None else list(points)
+        if points is None:
+            if not self._points:
+                raise ValueError("尚未配置 BACnet 点表")
+            return super()._collect_once(None)
+        rows = list(points)
         if not rows:
             raise ValueError("尚未配置 BACnet 点表")
         return super()._collect_once(rows)

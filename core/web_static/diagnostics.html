@@ -30,6 +30,7 @@
           <button type="button" class="diag-tab" role="tab" aria-selected="false" data-diag-tab="runtime" title="四遥显示快照由扫描或 100ms 定时合并写库，锁忙时保留最新状态重试">显示状态写库 <span class="diag-badge" id="badge-runtime">0</span></button>
           <button type="button" class="diag-tab" role="tab" aria-selected="false" data-diag-tab="modbus" title="每服务最多 256 请求、每连接最多 32 请求，满载返回异常码 06">Modbus 调度 <span class="diag-badge" id="badge-modbus">0</span></button>
           <button type="button" class="diag-tab" role="tab" aria-selected="false" data-diag-tab="slow" title="最近 16 个入队至提交 >= 100ms 的写库批次">慢写库批次 <span class="diag-badge" id="badge-slow">0</span></button>
+          <button type="button" class="diag-tab" role="tab" aria-selected="false" data-diag-tab="audit" title="按时间倒序检索最近的操作审计记录">操作审计 <span class="diag-badge" id="badge-audit">0</span></button>
         </nav>
         <div class="diag-tab-panel" data-diag-panel="command" role="tabpanel">
           <p id="command-summary" class="muted diag-summary"></p>
@@ -44,6 +45,10 @@
         </div>
         <div class="diag-tab-panel" data-diag-panel="slow" role="tabpanel" hidden>
           <div class="diag-scroll"><table><thead><tr><th>时间 / RTU</th><th>消息 / 更新</th><th class="col-num">排队 ms</th><th class="col-num">写锁 / 退避 ms</th><th class="col-num">SQL / 提交 ms</th><th class="col-num">入队至提交 ms</th><th class="col-num">回执日志 ms</th></tr></thead><tbody id="slow-batches"></tbody></table></div>
+        </div>
+        <div class="diag-tab-panel" data-diag-panel="audit" role="tabpanel" hidden>
+          <div class="diag-audit-bar"><input id="audit-query" type="search" placeholder="筛选操作阶段、路径或对象关键字…" aria-label="筛选操作审计"><button type="button" id="audit-refresh">检索审计</button><span id="audit-status" class="muted"></span></div>
+          <div class="diag-scroll"><table><thead><tr><th>时间</th><th>操作阶段</th><th>请求 / 来源</th><th class="col-num">状态</th><th>详情摘要</th></tr></thead><tbody id="audit-rows"><tr><td colspan="5" class="muted">点击“检索审计”或切换到本页签加载</td></tr></tbody></table></div>
         </div>
       </section>
     </div>

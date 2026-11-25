@@ -34,10 +34,15 @@ CREATE TABLE IF NOT EXISTS connection_session (
  packet_recording INTEGER NOT NULL DEFAULT 1);
 CREATE INDEX IF NOT EXISTS connection_channel ON connection_session(channel_id,opened DESC);
 CREATE INDEX IF NOT EXISTS connection_opened ON connection_session(opened DESC);
+CREATE INDEX IF NOT EXISTS connection_rtu ON connection_session(rtu_id,opened DESC);
+CREATE INDEX IF NOT EXISTS connection_owner_open ON connection_session(owner,closed);
+CREATE INDEX IF NOT EXISTS connection_closed ON connection_session(closed);
+CREATE INDEX IF NOT EXISTS connection_heartbeat ON connection_session(heartbeat);
 CREATE TABLE IF NOT EXISTS connection_event (
  id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, time REAL NOT NULL,
  kind TEXT NOT NULL, direction TEXT NOT NULL, summary TEXT NOT NULL, data BLOB);
 CREATE INDEX IF NOT EXISTS connection_events ON connection_event(session_id,id DESC);
+CREATE INDEX IF NOT EXISTS connection_events_kind ON connection_event(session_id,kind,id DESC);
 CREATE TABLE IF NOT EXISTS connection_writer (
  owner TEXT PRIMARY KEY, heartbeat REAL NOT NULL, dropped INTEGER NOT NULL,
  error TEXT NOT NULL);
@@ -130,21 +135,30 @@ class ConnectionJournal:
         con = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            con = sqlite3.connect(self.path, timeout=5)
+            con = sqlite3.connect(self.path, timeout=5, isolation_level=None)
             con.execute('PRAGMA busy_timeout=5000')
             con.execute('PRAGMA temp_store=MEMORY')
             if con.execute('PRAGMA page_count').fetchone()[0] == 0:
                 con.execute('PRAGMA auto_vacuum=INCREMENTAL')
             con.execute('PRAGMA journal_mode=WAL')
             con.execute('PRAGMA synchronous=NORMAL')
-            con.executescript('BEGIN IMMEDIATE;\n' + SCHEMA)
-            if 'packet_recording' not in {r[1] for r in con.execute('PRAGMA table_info(connection_session)')}:
-                con.execute('ALTER TABLE connection_session ADD COLUMN packet_recording INTEGER NOT NULL DEFAULT 1')
-            sync_embedded_schema(con)
-            con.commit()
+            con.executescript(SCHEMA)
+            con.execute('BEGIN IMMEDIATE')
+            try:
+                if 'packet_recording' not in {r[1] for r in con.execute('PRAGMA table_info(connection_session)')}:
+                    con.execute('ALTER TABLE connection_session ADD COLUMN packet_recording INTEGER NOT NULL DEFAULT 1')
+                sync_embedded_schema(con)
+                con.commit()
+            except Exception:
+                if con.in_transaction:
+                    con.rollback()
+                raise
             self._ready.set()
+            self._known_sessions = set()
             last_beat = 0
             pending_prune = set()
+            unvacuumed_rows = 0
+            last_vacuum = time.monotonic()
             while not self._stop.is_set() or not self.queue.empty():
                 batch = []
                 try:
@@ -156,20 +170,26 @@ class ConnectionJournal:
                         batch.append(self.queue.get_nowait())
                     except queue.Empty:
                         break
-                flushed = []
+                flushed = [args[0] for operation, args in batch if operation == 'flush']
+                writes = [(operation, args) for operation, args in batch if operation != 'flush']
+                now = time.time()
+                prune_due = bool(pending_prune) and (now - getattr(self, '_last_prune', 0) >= 15 or bool(flushed))
+                beat_due = now - last_beat >= 5 or bool(flushed)
+                if not writes and not prune_due and not beat_due:
+                    for done in flushed:
+                        done.set()
+                    continue
                 try:
-                    for attempt in range(3):
+                    for attempt in range(5):
                         try:
+                            # 显式使用 BEGIN IMMEDIATE，避免 WAL 多进程下 DEFERRED 读转写锁升级绕过 busy_timeout 丢事件。
+                            con.execute('BEGIN IMMEDIATE')
                             touched = set()
-                            for operation, args in batch:
-                                if operation == 'flush':
-                                    if attempt == 0:
-                                        flushed.append(args[0])
-                                else:
-                                    self._apply(con, operation, args)
-                                    touched.add(args[0])
+                            for operation, args in writes:
+                                self._apply(con, operation, args)
+                                touched.add(args[0])
                             pending_prune.update(touched)
-                            prune = time.time()-getattr(self, '_last_prune', 0) >= 1 or bool(flushed)
+                            prune = bool(pending_prune) and (time.time() - getattr(self, '_last_prune', 0) >= 15 or bool(flushed))
                             pruned_rows = 0
                             for ident in pending_prune if prune else ():
                                 cutoff = con.execute('SELECT id FROM connection_event WHERE session_id=? '
@@ -197,22 +217,28 @@ class ConnectionJournal:
                                             (expired, expired))
                                 last_beat = now
                             con.commit()
-                            if pruned_rows > 0:
+                            unvacuumed_rows += pruned_rows
+                            now_m = time.monotonic()
+                            if unvacuumed_rows >= 1000 or (unvacuumed_rows > 0 and now_m - last_vacuum >= 60.0):
                                 try:
                                     con.execute('PRAGMA incremental_vacuum(200)')
+                                    unvacuumed_rows = 0
+                                    last_vacuum = now_m
                                 except sqlite3.Error:
                                     pass
                             break
                         except sqlite3.OperationalError as op_exc:
-                            con.rollback()
+                            if con.in_transaction:
+                                con.rollback()
                             msg = str(op_exc).lower()
-                            if attempt < 2 and ('locked' in msg or 'busy' in msg):
-                                time.sleep(0.05 * (attempt + 1))
+                            if attempt < 4 and ('locked' in msg or 'busy' in msg):
+                                time.sleep(min(0.5, 0.04 * (2 ** attempt)))
                                 continue
                             raise
                 except Exception as exc:
-                    con.rollback()
-                    self.dropped += sum(op != 'flush' for op, _ in batch)
+                    if con.in_transaction:
+                        con.rollback()
+                    self.dropped += len(writes)
                     self.error = str(exc)
                     now_m = time.monotonic()
                     if now_m >= getattr(self, '_next_write_error_log', 0.0):
@@ -235,12 +261,12 @@ class ConnectionJournal:
             policy = meta.get('packet_enabled', lambda: True)
             self._policies[ident] = policy
             self._policy_values[ident] = bool(policy())
+            self._known_sessions.add(ident)
             con.execute('INSERT INTO connection_session '
-                        '(id,owner,service,protocol,channel_id,rtu_id,peer,local,state,opened,updated,heartbeat) '
-                        'VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                        '(id,owner,service,protocol,channel_id,rtu_id,peer,local,state,opened,updated,heartbeat,packet_recording) '
+                        'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
                         (ident,self.owner,meta['service'],meta['protocol'],meta.get('channel_id'),
-                         meta.get('rtu_id'),peer,local,'connected',at,at,at))
-            con.execute('UPDATE connection_session SET packet_recording=? WHERE id=?', (int(self._policy_values[ident]),ident))
+                         meta.get('rtu_id'),peer,local,'connected',at,at,at,int(self._policy_values[ident])))
             con.execute('INSERT INTO connection_event(session_id,time,kind,direction,summary) VALUES(?,?,?,?,?)',
                         (ident,at,'log','',f'客户端接入 {peer} → {local}'))
         elif operation == 'state':
@@ -252,11 +278,14 @@ class ConnectionJournal:
             if state == 'closed':
                 self._policies.pop(ident, None)
                 self._policy_values.pop(ident, None)
+                self._known_sessions.discard(ident)
         elif operation == 'event':
             ident, at, kind, direction, summary, data = args
-            if not con.execute('SELECT 1 FROM connection_session WHERE id=?',(ident,)).fetchone():
-                self.dropped += 1
-                return
+            if ident not in self._known_sessions:
+                if not con.execute('SELECT 1 FROM connection_session WHERE id=?',(ident,)).fetchone():
+                    self.dropped += 1
+                    return
+                self._known_sessions.add(ident)
             enabled = True
             if kind == 'packet':
                 enabled = bool(self._policies.get(ident, lambda: True)())
@@ -352,9 +381,11 @@ def read_history(db_path, component, ident=None, *, events=False, query=None):
     empty = {'items':[], 'total':0, 'writers':[], 'retention':'每连接最近10000条记录；离线历史保留7天'}
     if not path.exists():
         return None if ident else empty
-    con = sqlite3.connect(path.as_uri()+'?mode=ro', uri=True, timeout=3)
+    con = sqlite3.connect(path.as_uri()+'?mode=ro', uri=True, timeout=3, isolation_level=None)
     con.row_factory = sqlite3.Row
     try:
+        con.execute('PRAGMA busy_timeout=3000')
+        con.execute('BEGIN')
         writers = [dict(row) for row in con.execute('SELECT * FROM connection_writer')]
         if ident:
             row = con.execute('SELECT * FROM connection_session WHERE id=?',(ident,)).fetchone()
@@ -397,4 +428,6 @@ def read_history(db_path, component, ident=None, *, events=False, query=None):
         empty.update(items=rows,total=con.execute('SELECT count(*) FROM connection_session WHERE '+where,values).fetchone()[0],writers=writers)
         return empty
     finally:
+        if con.in_transaction:
+            con.rollback()
         con.close()

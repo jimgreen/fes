@@ -486,9 +486,9 @@ async function api(path, options = {}) {
     ...requestOptions,
     headers: { "Content-Type": "application/json", ...(requestOptions.headers || {}) },
   });
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    let message = data.error?.message || "请求失败";
+    let message = data.error?.message || `HTTP ${response.status}`;
     if (data.error?.code === "referenced") {
       message +=
         "：" +
@@ -1025,9 +1025,33 @@ function reconcileBody(body, rows, cache, patchCells = false) {
   }
   cache.rows = rows;
 }
+const selectedRowKeys = new Set();
+function isBatchSelectableResource() {
+  return pointKinds.includes(state.resource);
+}
+function updateBatchOpsBar() {
+  const bar = $("#batch-ops-bar");
+  if (!bar) return;
+  const selectable = isBatchSelectableResource();
+  if (!selectable) selectedRowKeys.clear();
+  const count = selectedRowKeys.size;
+  bar.hidden = !selectable || count === 0;
+  const countEl = $("#batch-selected-count");
+  if (countEl) countEl.textContent = "已选 " + count + " 项";
+  const scaleBtn = $("#batch-edit-scale");
+  if (scaleBtn) scaleBtn.hidden = state.resource !== "yc";
+  const selectAll = $("#batch-select-all");
+  if (selectAll && selectable && state.items.length) {
+    const schema = schemaFor();
+    const allChecked = state.items.every((item) => selectedRowKeys.has(keyOf(item, schema)));
+    selectAll.checked = allChecked;
+    selectAll.indeterminate = !allChecked && count > 0;
+  }
+}
 function renderTable() {
   const body = $("#table-body");
   const showTrend = pointTrend && pointKinds.includes(state.resource);
+  const selectable = isBatchSelectableResource();
   body.closest(".data-table").classList.toggle("rtu-table", state.resource === "rtus");
   const columns = visibleColumns();
   const schema = schemaFor();
@@ -1035,9 +1059,11 @@ function renderTable() {
   if (columnsKey !== tableRender.columnsKey) {
     tableRender.columnsKey = columnsKey;
     tableRender.entries = [];
+    selectedRowKeys.clear();
   }
   const head =
     "<tr>" +
+    (selectable ? '<th class="col-check"><input type="checkbox" id="batch-select-all" aria-label="全选当前页"></th>' : "") +
     columns
       .map(
         (column) =>
@@ -1071,8 +1097,9 @@ function renderTable() {
   const rows = state.items.length
     ? state.items.map((item, index) => {
         const key = keyOf(item, schema);
+        const checked = selectable && selectedRowKeys.has(key);
         const cached = tableRender.entries[index];
-        let reusable = cached && cached.key === key;
+        let reusable = cached && cached.key === key && cached.checked === checked;
         if (reusable) {
           for (let column = 0; column < columns.length; column++) {
             if (cached.values[column] !== item[columns[column].eng_name]) {
@@ -1086,7 +1113,10 @@ function renderTable() {
         const markup =
           '<tr data-row="' +
           index +
-          '">' +
+          '"' + (checked ? ' class="is-batch-selected"' : "") + '>' +
+          (selectable
+            ? '<td class="col-check"><input type="checkbox" data-batch-key="' + esc(key) + '"' + (checked ? " checked" : "") + ' aria-label="选择该行"></td>'
+            : "") +
           columns
             .map(
               (column, columnIndex) =>
@@ -1126,21 +1156,23 @@ function renderTable() {
           '<button class="row-button delete" data-delete="' +
           index +
           '">删除</button></td></tr>';
-        tableRender.entries[index] = { key, values, markup };
+        tableRender.entries[index] = { key, values, checked, markup };
         return markup;
       })
     : ['<tr><td class="empty" colspan="' +
-      (columns.length + 1) +
+      (columns.length + (selectable ? 2 : 1)) +
       '">没有匹配的记录</td></tr>'];
   reconcileBody(body, rows, tableRender, stableKeys);
   if (showTrend) {
+    const targetCellIdx = selectable ? 1 : 0;
     state.items.forEach((point, index) => {
       const row = body.rows[index];
       if (!row) return;
       const definition = {kind: state.resource, rtu_id: point.rtu_id, pnt_no: point.pnt_no, name: point.name};
-      pointTrend.bindRow?.(row, definition, row.cells[0]);
+      pointTrend.bindRow?.(row, definition, row.cells[targetCellIdx]);
     });
   }
+  updateBatchOpsBar();
   tableRender.entries.length = state.items.length;
   $("#result-count").textContent =
     "共 " +
@@ -1242,6 +1274,9 @@ $("#command-form").onsubmit = async (event) => {
     });
     $("#command-dialog").close();
     toast("指令已提交，等待通信线程下发");
+    if (typeof window.scadaTrackCommand === "function") {
+      window.scadaTrackCommand({ rtu_id: command.row.rtu_id, kind: command.kind, pnt_no: command.row.pnt_no, value });
+    }
     await loadRows({fresh:true});
   } catch (error) {
     $("#command-error").textContent = error.message;
@@ -2191,8 +2226,8 @@ $("#process-rows").onclick = async (event) => {
   if (!button) return;
   if (button.dataset.processLog) openProcessLogs(button.dataset.processLog);
   else if (button.dataset.processAction) {
-    if (button.dataset.processAction === "stop" && (button.dataset.processKey === "main" || button.dataset.processKey === "writer")) {
-      if (!(await window.scadaConfirm("确认停止核心进程 " + button.dataset.processKey + "？", { title: "确认停止", confirmText: "确认停止", danger: true }))) return;
+    if (button.dataset.processAction === "stop" && typeof window.scadaConfirm === "function") {
+      if (!(await window.scadaConfirm("确认停止进程 " + button.dataset.processKey + "？", { title: "确认停止", confirmText: "确认停止", danger: true }))) return;
     }
     controlProcess(button.dataset.processKey, button.dataset.processAction);
   }
@@ -2213,8 +2248,12 @@ async function loadScdfe() {
   if (filter === "disabled") params.set("process_enable", "0");
   else if (filter !== "") params.set("process_status", filter);
   try {
-    const data = await api("/api/scdfe_c/status?" + params);
+    const [data, procData] = await Promise.all([
+      api("/api/scdfe_c/status?" + params),
+      api("/api/processes").catch(() => null),
+    ]);
     if (request !== monitor.request) return;
+    renderScdfeCoreProcs(procData?.items || []);
     if (monitor.offset && monitor.offset >= data.total) {
       monitor.offset = 0;
       return loadScdfe();
@@ -2232,7 +2271,7 @@ async function loadScdfe() {
     $("#scdfe-status").innerHTML = [
       [
         statusBadge(item.process_status),
-        "主进程 · PID " + (item.process_pid || "—"),
+        "主进程 · PID " + esc(item.process_pid || "—"),
       ],
       [esc(data.counts.total), "RTU 总数"],
       [esc(data.counts.running), "线程运行中"],
@@ -2492,8 +2531,9 @@ async function loadScdfeLogs(refreshContent = true) {
         )
         .join("");
     const processMenu = $("#log-process");
-    if (processMenu.innerHTML !== processOptions) {
+    if (processMenu._processMarkup !== processOptions && document.activeElement !== processMenu) {
       processMenu.innerHTML = processOptions;
+      processMenu._processMarkup = processOptions;
       processMenu.value = selected;
     }
     $("#log-directory").textContent = (logs.record === "packet" ? "报文目录：" : "运行日志目录：") + data.directory;
@@ -2956,7 +2996,7 @@ if ($("#logs-refresh")) $("#logs-refresh").onclick = () => loadScdfeLogs(true);
 document.querySelectorAll(".lb-record-tab").forEach((tab) => {
   tab.onclick = () => {
     const record = tab.dataset.record;
-    if (!record || record === logs.record || logs.loading) return;
+    if (!record || record === logs.record) return;
     logs.record = record;
     $("#log-direction").disabled = logs.record === "runtime";
     if (logs.record === "runtime") $("#log-direction").value = "";
@@ -3110,6 +3150,9 @@ $("#search").oninput = () => {
 };
 $("#rtu-filter").onchange = (event) => {
   state.rtu = event.target.value.trim();
+  if (typeof window.scadaFocusContext?.set === "function") {
+    window.scadaFocusContext.set({ rtu_id: state.rtu || null });
+  }
   state.offset = 0;
   for (const saved of Object.values(state.listStates)) saved.offset = 0;
   ++state.request;
@@ -3119,9 +3162,8 @@ $("#rtu-filter").onchange = (event) => {
   }
   showView();
   guardTableScope(context());
-  $("#add").disabled = true;
   clearTimeout(state.rtuTimer);
-  state.rtuTimer = setTimeout(loadRows, 300);
+  loadRows();
 };
 $("#clear-filters").onclick = () => {
   if (tableGroup(state.resource) !== "parameters") {
@@ -3319,6 +3361,166 @@ $("#efile-import-form")?.addEventListener("submit", async (event) => {
     if (submitBtn) submitBtn.disabled = false;
   }
 });
+function renderScdfeCoreProcs(items) {
+  const host = $("#scdfe-core-procs");
+  if (!host) return;
+  const core = (items || []).filter((r) => r.kind !== "debug");
+  if (!core.length) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = core.map((row) => {
+    const key = esc(row.process_key);
+    const label = esc(processLabel(row.log_process));
+    const alive = Boolean(row.alive);
+    const err = Number(row.process_status) === 5;
+    const cls = err ? "is-err" : (alive ? "is-ok" : "is-stop");
+    return `<div class="core-proc-chip ${cls}">` +
+      `<span class="core-proc-dot"></span>` +
+      `<strong>${label}</strong>` +
+      `<span class="mono">PID ${esc(row.process_pid || "—")}</span>` +
+      `<button type="button" class="row-button" data-core-proc-key="${key}" data-core-proc-act="${alive ? "stop" : "start"}">${alive ? "停止" : "启动"}</button>` +
+      `<button type="button" class="row-button" data-core-proc-log="${esc(row.log_process)}">日志</button>` +
+      `</div>`;
+  }).join("");
+}
+
+$("#scdfe-core-procs")?.addEventListener("click", async (event) => {
+  const logBtn = event.target.closest("[data-core-proc-log]");
+  if (logBtn) return openProcessLogs(logBtn.dataset.coreProcLog);
+  const actBtn = event.target.closest("[data-core-proc-key]");
+  if (!actBtn) return;
+  const key = actBtn.dataset.coreProcKey;
+  const act = actBtn.dataset.coreProcAct;
+  if (act === "stop" && typeof window.scadaConfirm === "function") {
+    if (!(await window.scadaConfirm(`确认停止进程 ${key}？`, { title: "确认停止", confirmText: "确认停止", danger: true }))) return;
+  }
+  actBtn.disabled = true;
+  try {
+    await api("/api/processes/control", { method: "POST", body: JSON.stringify({ target: key, action: act }) });
+    toast("进程操作已受理");
+    setTimeout(() => loadScdfe(), 500);
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    actBtn.disabled = false;
+  }
+});
+
+$("#table-head")?.addEventListener("change", (event) => {
+  if (event.target.id !== "batch-select-all") return;
+  const schema = schemaFor();
+  const checked = event.target.checked;
+  state.items.forEach((item) => {
+    const k = keyOf(item, schema);
+    if (checked) selectedRowKeys.add(k);
+    else selectedRowKeys.delete(k);
+  });
+  renderTable();
+});
+
+$("#table-body")?.addEventListener("change", (event) => {
+  const cb = event.target.closest("input[data-batch-key]");
+  if (!cb) return;
+  const k = cb.dataset.batchKey;
+  if (cb.checked) selectedRowKeys.add(k);
+  else selectedRowKeys.delete(k);
+  cb.closest("tr")?.classList.toggle("is-batch-selected", cb.checked);
+  updateBatchOpsBar();
+});
+
+$("#batch-clear-selection")?.addEventListener("click", () => {
+  selectedRowKeys.clear();
+  renderTable();
+});
+
+$("#batch-delete-rows")?.addEventListener("click", async () => {
+  if (!isBatchSelectableResource() || !selectedRowKeys.size) return;
+  const ctx = context();
+  const schema = ctx.schema;
+  const targets = state.items.filter((item) => selectedRowKeys.has(keyOf(item, schema)));
+  if (!targets.length) return;
+  const ok = await window.scadaConfirm(
+    `确认批量删除已勾选的 ${targets.length} 条 ${schema.head.chn_name} 记录？该操作不可恢复。`,
+    { title: "批量删除确认", confirmText: "确认删除", danger: true },
+  );
+  if (!ok) return;
+  let success = 0;
+  let failed = 0;
+  for (const row of targets) {
+    try {
+      await api(pathFor(ctx, row), {
+        method: "DELETE",
+        headers: { "If-Match": String(row._version) },
+      });
+      selectedRowKeys.delete(keyOf(row, schema));
+      success += 1;
+    } catch (_) {
+      failed += 1;
+    }
+  }
+  toast(failed ? `批量删除完成：成功 ${success} 条，失败 ${failed} 条` : `已批量删除 ${success} 条记录`, failed > 0);
+  await loadRows({ fresh: true });
+  await refreshSummary();
+});
+
+$("#batch-edit-scale")?.addEventListener("click", () => {
+  if (state.resource !== "yc" || !selectedRowKeys.size) return;
+  const dialog = $("#batch-scale-dialog");
+  if (!dialog) return;
+  $("#batch-scale-meta").textContent = `当前已选 ${selectedRowKeys.size} 条遥测定义（仅更新填写的字段）`;
+  $("#batch-raw-scale").value = "";
+  $("#batch-raw-base").value = "";
+  $("#batch-value-zone").value = "";
+  $("#batch-scale-error").textContent = "";
+  dialog.showModal();
+});
+$("#close-batch-scale")?.addEventListener("click", () => $("#batch-scale-dialog")?.close());
+$("#cancel-batch-scale")?.addEventListener("click", () => $("#batch-scale-dialog")?.close());
+$("#batch-scale-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const body = {};
+  const scaleStr = $("#batch-raw-scale").value.trim();
+  const baseStr = $("#batch-raw-base").value.trim();
+  const zoneStr = $("#batch-value-zone").value.trim();
+  if (scaleStr !== "") body.raw_scale = Number(scaleStr);
+  if (baseStr !== "") body.raw_base = Number(baseStr);
+  if (zoneStr !== "") body.value_zone = Number(zoneStr);
+  if (!Object.keys(body).length) {
+    $("#batch-scale-error").textContent = "请至少填写一项要修改的参数";
+    return;
+  }
+  const ctx = context();
+  const schema = ctx.schema;
+  const targets = state.items.filter((item) => selectedRowKeys.has(keyOf(item, schema)));
+  if (!targets.length) return;
+  const btn = $("#submit-batch-scale");
+  btn.disabled = true;
+  $("#batch-scale-error").textContent = "";
+  let success = 0;
+  let failed = 0;
+  try {
+    for (const row of targets) {
+      try {
+        await api(pathFor(ctx, row), {
+          method: "PATCH",
+          headers: { "If-Match": String(row._version) },
+          body: JSON.stringify(body),
+        });
+        success += 1;
+      } catch (_) {
+        failed += 1;
+      }
+    }
+    $("#batch-scale-dialog")?.close();
+    toast(failed ? `批量更新完成：成功 ${success} 条，失败 ${failed} 条` : `已批量更新 ${success} 条遥测参数`, failed > 0);
+    await loadRows({ fresh: true });
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 setInterval(() => {
   if (
     document.hidden ||

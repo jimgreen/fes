@@ -3,15 +3,15 @@
   const $ = id => document.getElementById(id), params = new URLSearchParams(location.search);
   const ident = location.pathname.split('/')[2] || '';
   let offset=0, busy=false, epoch=0, items=[], before=null, historyMode=false;
-  let after=null, hasOlder=false, catchup=false, summaryMarkup='';
+  let after=null, hasOlder=false, catchup=false, summaryMarkup='', lastRowsHtml='';
   let targets=[], targetsLoaded=false, refreshTargets=false, pendingReload=false;
   const esc = value => String(value??'—').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const stamp = n => n ? new Date(n*1000).toLocaleString('zh-CN',{hour12:false}) : '—';
   const state = row => row.stale ? '状态未知（记录进程心跳超时）' : ({connected:'已接入',active:'传输激活',inactive:'传输停止',closed:'已断开',unknown:'状态待确认'}[row.state]||row.state);
   const message = (text,error=false) => { $('message').textContent=text; $('message').dataset.error=error; };
   async function api(path) {
-    const response = await fetch(path,{cache:'no-store',signal:AbortSignal.timeout(12000)});
-    const result=await response.json();
+    const response = await fetch(path,{cache:'no-cache',signal:AbortSignal.timeout(12000)});
+    const result=await response.json().catch(()=>({}));
     if(!response.ok) throw Error(result.error?.message||`HTTP ${response.status}`);
     return result;
   }
@@ -67,7 +67,8 @@
       $('notice').textContent='记录 IEC104 和 Modbus TCP 转发通道实际接入的客户端；历史从升级后新接入的连接开始。';
     }
     warnings(result);
-    $('rows').innerHTML=result.items.map(row=>`<tr><td><strong>${esc(row.display_name)}</strong><small>通道 ${esc(row.channel_id)}${row.rtu_id!=null?` / RTU ${esc(row.rtu_id)}`:''}</small></td><td>${esc(row.service)}<small>${esc(row.protocol)}</small></td><td>${esc(row.peer)}</td><td>${esc(row.local)}</td><td>${esc(state(row))}</td><td>${esc(stamp(row.opened))}<small>${esc(stamp(row.closed))}</small></td><td>${row.rx_count} / ${row.tx_count}<small>${row.rx_bytes} / ${row.tx_bytes} B</small></td><td><a href="/connections/${encodeURIComponent(row.id)}">独立详情 ↗</a></td></tr>`).join('') || `<tr><td colspan="8" class="conn-empty">暂无符合条件的连接记录。支持 ${result.component==='t'?'IEC104、Modbus TCP':'IEC104、Modbus TCP、OPC UA'} 实际入站连接。</td></tr>`;
+    const rowsHtml=result.items.map(row=>`<tr><td><strong>${esc(row.display_name)}</strong><small>通道 ${esc(row.channel_id)}${row.rtu_id!=null?` / RTU ${esc(row.rtu_id)}`:''}</small></td><td>${esc(row.service)}<small>${esc(row.protocol)}</small></td><td>${esc(row.peer)}</td><td>${esc(row.local)}</td><td>${esc(state(row))}</td><td>${esc(stamp(row.opened))}<small>${esc(stamp(row.closed))}</small></td><td>${row.rx_count} / ${row.tx_count}<small>${row.rx_bytes} / ${row.tx_bytes} B</small></td><td><a href="/connections/${encodeURIComponent(row.id)}">独立详情 ↗</a></td></tr>`).join('') || `<tr><td colspan="8" class="conn-empty">暂无连接记录</td></tr>`;
+    if(rowsHtml!==lastRowsHtml){ $('rows').innerHTML=rowsHtml; lastRowsHtml=rowsHtml; }
     $('total').textContent=`${result.total} 个连接 · 第 ${Math.floor(offset/50)+1} 页 · ${result.retention}`;
     $('prev').disabled=offset===0; $('next').disabled=offset+50>=result.total;
   }

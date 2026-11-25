@@ -92,7 +92,15 @@ body.workbench[data-log-module] .workbench-content > .log-browser { background:#
 .log-browser .lb-line.ERROR { color:#ffadb0; background:#c9556114; }
 .log-browser .lb-line.WARNING { color:#eac580; }
 .log-browser .lb-line.PROCESS { color:#75c7d1; }
-.log-browser .lb-line.PACKET { color:#9fc7ff; }
+.log-browser .lb-line.PACKET { color:#9fc7ff; cursor:pointer; }
+.log-browser .lb-line.is-decoded { background:var(--bg-selected, rgba(8,127,140,.22)) !important; box-shadow:inset 3px 0 var(--accent, #087f8c); }
+.log-browser .lb-decode-bar { display:flex; flex-direction:column; gap:4px; padding:6px 10px; border-top:var(--border, 1px solid #294055); background:var(--bg-subtle, #192d3e); color:var(--text-primary, #dfebf4); font-size:11px; max-height:130px; overflow:auto; }
+.log-browser .lb-decode-bar[hidden] { display:none !important; }
+.log-browser .lb-decode-head { display:flex; align-items:center; gap:8px; }
+.log-browser .lb-decode-head strong { color:var(--accent, #087f8c); font-size:11px; }
+.log-browser .lb-decode-head button { padding:2px 7px; font-size:11px; }
+.log-browser .lb-decode-head .lb-decode-close { margin-left:auto; }
+.log-browser .lb-decode-body { margin:0; white-space:pre-wrap; word-break:break-word; font:11px/1.45 var(--font-mono, Consolas, monospace); color:var(--text-primary, #dfebf4); background:transparent !important; border:0 !important; padding:0 !important; }
 .log-browser .lb-line:hover { background:#ffffff06; }
 .log-browser .lb-source { display:block; font-size:10px; color:#8ca6b8; }
 .log-browser .lb-content mark { background:#dab85a; color:#142535; border-radius:2px; }

@@ -534,7 +534,10 @@ class IEC104Service:
                         if forwarder is not None and server is not None:
                             has_inflight = (
                                 forwarder.pending is not None
-                                or any(p.get("pending") is not None for p in getattr(forwarder, "_peers", {}).values())
+                                or any(
+                                    getattr(p, "pending", None) is not None
+                                    for p in getattr(forwarder, "_peers", {}).values()
+                                )
                             )
                             if version_changed or has_inflight or now_m >= next_soe_fallback:
                                 forwarder.tick(server)

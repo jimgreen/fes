@@ -155,6 +155,11 @@ class _RequestHandler(socketserver.StreamRequestHandler):
             if owner:
                 try:
                     self.server.requests.put(request, timeout=2.0)
+                    if self.server.on_enqueue is not None:
+                        try:
+                            self.server.on_enqueue()
+                        except Exception:
+                            pass
                 except queue.Full:
                     self.server.reject_busy(request_id, request)
             if not request.done.wait(self.server.request_timeout):
@@ -183,10 +188,11 @@ class _RequestHandler(socketserver.StreamRequestHandler):
 
 class _WriterTCPServer(_ThreadingTCPServer):
     def __init__(self, address, requests: queue.Queue[WriterRequest], token: str,
-                 request_timeout: float):
+                 request_timeout: float, on_enqueue=None):
         self.requests = requests
         self.token = token
         self.request_timeout = request_timeout
+        self.on_enqueue = on_enqueue
         self._cache: dict[str, tuple[bytes, dict[str, Any]]] = {}
         self._inflight: dict[str, WriterRequest] = {}
         self._cache_lock = threading.RLock()
@@ -252,11 +258,12 @@ class WriterIpcServer:
     """
 
     def __init__(self, db_path: str | Path, requests: queue.Queue[WriterRequest], *,
-                 request_timeout: float = REQUEST_TIMEOUT):
+                 request_timeout: float = REQUEST_TIMEOUT, on_enqueue=None):
         self.db_path = Path(db_path).resolve()
         self.endpoint = endpoint_path(self.db_path)
         self.requests = requests
         self.request_timeout = float(request_timeout)
+        self.on_enqueue = on_enqueue
         if self.request_timeout <= 0:
             raise ValueError("request_timeout 必须为正数")
         self.token = secrets.token_urlsafe(32)
@@ -274,7 +281,7 @@ class WriterIpcServer:
         if self._server is not None:
             raise RuntimeError("写库 IPC 服务已启动")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        server = _WriterTCPServer(("127.0.0.1", 0), self.requests, self.token, self.request_timeout)
+        server = _WriterTCPServer(("127.0.0.1", 0), self.requests, self.token, self.request_timeout, on_enqueue=self.on_enqueue)
         self._server = server
         host, port = server.server_address
         record = {

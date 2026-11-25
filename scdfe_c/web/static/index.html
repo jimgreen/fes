@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="/static/point-trend.css" />
     <link rel="stylesheet" href="/static/ui-theme.css" />
     <script defer src="/static/ui-i18n.js"></script>
+    <script defer src="/static/workbench.js"></script>
     <script defer src="/static/layout-resizer.js"></script>
   </head>
   <body>
@@ -32,19 +33,20 @@
     <main class="shell">
       <aside class="sidebar">
         <div class="side-title">运行管理</div>
-        <button class="nav" data-resource="processes">
-          <span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span><b>进程监控</b>
-        </button>
         <button class="nav" data-resource="scdfe">
           <span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M5.6 18.4a9 9 0 0 1 0-12.8m12.8 0a9 9 0 0 1 0 12.8M8.5 15.5a5 5 0 0 1 0-7m7 0a5 5 0 0 1 0 7"/></svg></span><b>通信监控</b>
         </button>
+        <button class="nav" data-resource="processes">
+          <span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><circle cx="7" cy="7" r=".8"/><circle cx="7" cy="17" r=".8"/></svg></span><b>进程监控</b>
+        </button>
         <button class="nav" data-resource="logs">
-          <span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span><b>运行日志</b>
+          <span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span><b>日志报文</b>
         </button>
         <a class="nav" href="/soe"><span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><b>SOE 事件</b></a>
-        <a class="nav" href="/diagnostics"><span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span><b>运行诊断</b></a>
         <a class="nav" href="/command-traces"><span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10"/></svg></span><b>指令追踪</b></a>
         <a class="nav" href="/point-trends"><span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M3 17 8 11l4 4 5-7 4 4"/></svg></span><b>采样管理</b></a>
+        <a class="nav" href="/point-trace"><span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M4 7h12m0 0-3-3m3 3-3 3M4 17h12m0 0-3-3m3 3-3 3M20 4v16"/></svg></span><b>全链路对账</b></a>
+        <a class="nav" href="/diagnostics"><span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span><b>运行诊断</b></a>
         <div class="side-title">数据与定义</div>
         <details class="nav-branch" id="data-directory">
           <summary class="nav"><span aria-hidden="true"><svg class="ui-nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span><b>数据与定义</b></summary>
@@ -106,6 +108,12 @@
                 <button type="button" role="tab" id="point-tab-yk" data-point-kind="yk" aria-controls="point-definition-panel" aria-selected="false" tabindex="-1">遥控 YK</button>
               </div>
               <div class="view-tools">
+                <div class="batch-ops-bar" id="batch-ops-bar" hidden>
+                  <span id="batch-selected-count" class="muted">已选 0 项</span>
+                  <button type="button" class="row-button" id="batch-edit-scale" hidden>批量改比例/偏移</button>
+                  <button type="button" class="row-button delete" id="batch-delete-rows">批量删除</button>
+                  <button type="button" class="row-button" id="batch-clear-selection">取消</button>
+                </div>
                 <div class="segments" aria-label="显示字段">
                   <button id="view-common" class="selected">常用字段</button
                   ><button id="view-live">四遥数据</button
@@ -146,7 +154,7 @@
             <div class="title-group"><h1>进程监控</h1></div>
             <div class="actions">
               <button class="button primary" id="process-all-start">一键启动全部</button>
-              <button class="button secondary" id="process-all-stop">一键停止全部</button>
+              <button class="button danger" id="process-all-stop">一键停止全部</button>
               <button class="button secondary" id="process-refresh">刷新</button>
               <button class="button secondary" id="open-command-server-config" type="button">TCP 指令服务配置</button>
             </div>
@@ -183,11 +191,11 @@
             </div>
             <div id="scdfe-details" class="process-details"></div>
             <div class="config-panel config-entry">
-              <button class="button secondary" id="open-scdfe-config" type="button">运行参数与日志保留</button>
-              <span class="muted">线程启动间隔和日志文件保留时间</span>
+              <button class="button secondary" id="open-scdfe-config" type="button" title="配置线程启动间隔和日志文件保留时间">运行参数与日志保留</button>
             </div>
           </div>
           <div id="scdfe-error" class="error-panel" role="alert" hidden></div>
+          <div id="scdfe-core-procs" class="scdfe-core-procs" hidden></div>
           <div id="scdfe-status" class="scdfe-status"></div>
           <div class="filterbar">
             <h2>RTU 通信线程</h2>
@@ -463,6 +471,34 @@
           <span id="efile-import-error" class="form-error" role="alert"></span>
           <button class="button secondary" type="button" id="cancel-efile-import">取消</button>
           <button class="button primary" type="submit" id="submit-efile-import">确认导入</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="batch-scale-dialog" class="config-dialog" aria-labelledby="batch-scale-title">
+      <form id="batch-scale-form" class="config-dialog-form">
+        <div class="dialog-head">
+          <h2 id="batch-scale-title">批量修改 YC 比例 / 基值</h2>
+          <button type="button" class="icon-button" id="close-batch-scale" aria-label="关闭">×</button>
+        </div>
+        <div class="efile-import-fields">
+          <div id="batch-scale-meta" class="muted"></div>
+          <label class="field">
+            <span>生数据比例 (raw_scale，留空不改)</span>
+            <input id="batch-raw-scale" type="number" step="any" placeholder="例如 0.01 或 1" />
+          </label>
+          <label class="field">
+            <span>生数据基值 (raw_base，留空不改)</span>
+            <input id="batch-raw-base" type="number" step="any" placeholder="例如 0" />
+          </label>
+          <label class="field">
+            <span>刷新死区 (value_zone，留空不改)</span>
+            <input id="batch-value-zone" type="number" step="any" min="0" placeholder="例如 0.1" />
+          </label>
+        </div>
+        <div class="dialog-foot">
+          <span id="batch-scale-error" class="form-error" role="alert"></span>
+          <button class="button secondary" type="button" id="cancel-batch-scale">取消</button>
+          <button class="button primary" type="submit" id="submit-batch-scale">应用到已选测点</button>
         </div>
       </form>
     </dialog>

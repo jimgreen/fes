@@ -116,7 +116,7 @@
       channelRows = rows;
       if (request !== channelsRequest) return;
       if ($("#channels")) {
-        $("#channels").innerHTML = rows.map(r => `<tr data-select="${esc(r.rtu_id)}"><td>${esc(r.rtu_id)}</td><td>${esc(r.channel_id)}</td><td>${esc(r.channel_type)}</td><td>${esc(r.name || "")}</td><td>${r.process_enable ? "启用" : "停用"}</td><td><a href="/points?rtu_id=${encodeURIComponent(r.rtu_id)}">四遥数据</a> <button type="button" data-edit='${esc(JSON.stringify(r))}'>编辑</button> <button type="button" data-version="${esc(r._version)}" data-delete='${esc(r.rtu_id)}'>删除</button> <button type="button" data-export-efile="${esc(r.rtu_id)}">导出 E 文件</button></td></tr>`).join("") || '<tr><td colspan="6">暂无通道</td></tr>';
+        $("#channels").innerHTML = rows.map(r => `<tr data-select="${esc(r.rtu_id)}"><td>${esc(r.rtu_id)}</td><td>${esc(r.channel_id)}</td><td>${esc(r.channel_type)}</td><td>${esc(r.name || "")}</td><td>${r.process_enable ? "启用" : "停用"}</td><td><a href="/points?rtu_id=${encodeURIComponent(r.rtu_id)}">四遥数据</a> <button type="button" data-edit='${esc(JSON.stringify(r))}'>编辑</button> <button type="button" class="danger" data-version="${esc(r._version)}" data-delete='${esc(r.rtu_id)}'>删除</button> <button type="button" data-export-efile="${esc(r.rtu_id)}">导出 E 文件</button></td></tr>`).join("") || '<tr><td colspan="6">暂无通道</td></tr>';
         notice("#channel-message", `共 ${rows.length} 个通道`);
       }
       if ($("#point-rtu")) {
@@ -248,7 +248,7 @@
       const stable = body === previousPointBody && previousPointRows && rows.length === previousPointRows.length &&
         rows.every((row, i) => row.key === previousPointRows[i].key);
       if (!stable) {
-        body.innerHTML = rows.map(row => `<tr>${trendColumn}${row.cells.map(value => `<td>${esc(value)}</td>`).join("")}<td><button data-point-edit='${esc(row.edit)}'>编辑</button> <button data-owner="${esc(rtu)}" data-version="${esc(row.version)}" data-point-delete="${kind}" data-point-no="${esc(row.no)}">删除</button></td></tr>`).join("") || `<tr><td colspan="${columnCount}">${rtu ? "暂无测点" : "请先选择通道"}</td></tr>`;
+        body.innerHTML = rows.map(row => `<tr>${trendColumn}${row.cells.map(value => `<td>${esc(value)}</td>`).join("")}<td><button data-point-edit='${esc(row.edit)}'>编辑</button> <button class="danger" data-owner="${esc(rtu)}" data-version="${esc(row.version)}" data-point-delete="${kind}" data-point-no="${esc(row.no)}">删除</button></td></tr>`).join("") || `<tr><td colspan="${columnCount}">${rtu ? "暂无测点" : "请先选择通道"}</td></tr>`;
       } else {
         rows.forEach((row, i) => {
           const old = previousPointRows[i], node = body.rows[i];

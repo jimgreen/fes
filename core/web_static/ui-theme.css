@@ -672,6 +672,75 @@ a:hover {
   border-color: var(--accent) !important;
 }
 
+/* 顶栏聚焦上下文芯片与右下角实时指令追踪浮条 */
+.ui-focus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px 0 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ui-focus-chip-clear {
+  font-size: 13px !important;
+  line-height: 1 !important;
+  padding: 0 3px !important;
+  color: var(--accent) !important;
+}
+
+.ui-command-tracker {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  min-width: 300px;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--accent);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-dialog);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ui-command-tracker[hidden] {
+  display: none !important;
+}
+
+.ui-cmd-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-cmd-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ui-cmd-link {
+  margin-left: auto;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ui-cmd-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ==================== 侧边栏与矢量图标 ==================== */
 
 .workbench-shell {
@@ -735,7 +804,7 @@ a:hover {
   width: 18px !important;
   height: 18px;
   flex-shrink: 0;
-  color: #64748B;
+  color: var(--sidebar-title);
   transition: color var(--ease);
 }
 
@@ -756,12 +825,12 @@ a:hover {
 .workbench-sidebar button.nav:hover:not(:disabled) {
   background: var(--sidebar-hover) !important;
   border-color: transparent !important;
-  color: #FFFFFF !important;
+  color: var(--sidebar-active-text) !important;
 }
 
 .workbench-sidebar .nav:hover span,
 .sidebar .nav:hover span {
-  color: #CBD5E1;
+  color: var(--sidebar-active-text);
 }
 
 .workbench-sidebar .nav[aria-current="page"],
@@ -851,6 +920,10 @@ body.workbench[data-log-module] .workbench-content > .log-browser {
   padding: 16px !important;
 }
 
+.workbench .test-summary > .card.test-selector {
+  padding: 6px 10px !important;
+}
+
 .page-panel {
   padding: 16px 18px 10px !important;
 }
@@ -920,7 +993,7 @@ small {
   border-radius: var(--radius-btn) !important;
 }
 
-/* KPI 卡片统一 3 层结构与呼吸感 */
+/* 顶部 KPI 指标统一压缩为工程高密度紧凑单行条（32–36px），释放 80%+ 视口给图和表 */
 .stats > div,
 .communication-summary .panel,
 .summary-card,
@@ -928,16 +1001,33 @@ small {
 .scdfe-status .metric {
   background: var(--bg-surface) !important;
   border: var(--border) !important;
-  border-radius: var(--radius-card) !important;
-  padding: 14px 16px !important;
-  transition: border-color var(--ease), transform var(--ease);
+  border-radius: var(--radius-btn) !important;
+  padding: 5px 10px !important;
+  min-height: 32px;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: baseline !important;
+  justify-content: space-between !important;
+  gap: 8px;
+  transition: border-color var(--ease);
 }
 
 .metric,
 .scdfe-status .metric {
   background: var(--bg-subtle) !important;
   border-radius: var(--radius-btn) !important;
-  padding: 11px 14px !important;
+  padding: 5px 10px !important;
+}
+
+.communication-summary .panel h2,
+.stats > div span,
+.metric span,
+.scdfe-status .metric span {
+  margin: 0 !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--text-secondary) !important;
+  white-space: nowrap;
 }
 
 .stats strong,
@@ -945,9 +1035,13 @@ small {
 .summary-card strong,
 .metric strong,
 .metric b {
+  margin: 0 !important;
+  font-size: 16px !important;
+  line-height: 1.2 !important;
   color: var(--text-primary) !important;
   font-weight: 700;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .communication-summary strong,
@@ -1075,7 +1169,7 @@ button.danger,
 .button.danger,
 .workbench .danger {
   color: var(--danger) !important;
-  border-color: rgba(220, 38, 38, 0.32) !important;
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent) !important;
 }
 
 button.danger:hover:not(:disabled),
@@ -1085,8 +1179,8 @@ button.danger:hover:not(:disabled),
   color: var(--danger) !important;
 }
 
-input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
-select,
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not(.trend-cell-input),
+select:not(.trend-cell-select),
 textarea {
   background: var(--bg-surface) !important;
   color: var(--text-primary) !important;
@@ -1095,8 +1189,8 @@ textarea {
   transition: border-color var(--ease), box-shadow var(--ease), background var(--ease);
 }
 
-input:not([type="checkbox"]):not([type="radio"]):focus,
-select:focus,
+input:not([type="checkbox"]):not([type="radio"]):not(.trend-cell-input):focus,
+select:not(.trend-cell-select):focus,
 textarea:focus {
   border-color: var(--accent) !important;
   box-shadow: 0 0 0 3px var(--accent-ring) !important;
@@ -2235,6 +2329,30 @@ td.col-num {
   text-align: right !important;
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
+}
+
+/* 防止全局 button 亮色/默认样式盖过全链路对账与诊断页未选中 Tab */
+.workbench .pt-kind-btn,
+.workbench .diag-tab {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+.workbench .pt-kind-btn:hover,
+.workbench .diag-tab:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+.workbench .pt-kind-btn.is-active,
+.workbench .diag-tab.is-active {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+  border-color: var(--accent) !important;
+}
+.workbench .diag-tab.is-active .diag-badge {
+  background: rgba(255, 255, 255, 0.22) !important;
+  color: var(--accent-contrast) !important;
 }
 
 @media (max-width: 960px) {

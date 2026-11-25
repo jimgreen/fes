@@ -25,9 +25,9 @@
   const rawStatusKinds = new Set(["yc", "yt"]);
   function pointNameFilter() { return $("#point-search").value.trim(); }
   async function api(path, options = {}) {
-    const response = await fetch(path, {cache:"no-store", ...options, headers:{"Content-Type":"application/json", ...(options.headers || {})}});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || "请求失败");
+    const response = await fetch(path, {cache:"no-cache", ...options, headers:{"Content-Type":"application/json", ...(options.headers || {})}});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error?.message || `HTTP ${response.status}`);
     return data;
   }
   function message(text, error = false) { const node = $("#test-message"); node.textContent = text || ""; node.className = "message" + (error ? " error" : ""); }
@@ -83,10 +83,10 @@
       if (rawStatus) states.push(point.raw_status);
       const times = [formatPointTime(point.refresh_time)];
       if (command) times.push(formatPointTime(point.cmd_handle_time));
-      return `<tr><td>${esc(point.pnt_no)}</td><td>${esc(point.name || "")}</td><td>${esc(point.value)}</td>` +
+      return `<tr><td>${esc(point.pnt_no)}</td><td>${esc(point.name || "")}</td><td class="val-cell-editable" data-inline-kind="${esc(kind)}" data-inline-no="${esc(point.pnt_no)}" data-inline-val="${esc(point.value ?? "")}" title="双击就地修改">${esc(point.value)}</td>` +
         states.map(value => `<td>${esc(value)}</td>`).join("") +
         times.map(value => `<td>${esc(value)}</td>`).join("") +
-        `<td><button type="button" data-point-action="${esc(kind)}" data-point-no="${esc(point.pnt_no)}">${command ? "下发" : "更新"}</button></td></tr>`;
+        `<td><button type="button" data-point-action="${esc(kind)}" data-point-no="${esc(point.pnt_no)}">${command ? "下发" : "更新"}</button>${kind === "yx" ? ` <button type="button" data-yx-flip="${esc(point.pnt_no)}">翻转</button>` : ""}</td></tr>`;
     }).join("") : `<tr><td colspan="${6 + (rawStatus ? 1 : 0) + (command ? 1 : 0)}" class="muted">${pointNameFilter() ? "没有匹配的测点" : "暂无定义"}</td></tr>`;
     const rtuId = state.rtu ? String(state.rtu.rtu_id) : "";
     const rebuilt = body._pointHtml !== html || body._pointRtu !== rtuId;
@@ -106,7 +106,7 @@
     const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     $(`[data-point-pager="${kind}"]`).innerHTML = total > PAGE_SIZE ? `<button type="button" data-point-page="prev" data-point-kind="${kind}" ${page === 0 ? "disabled" : ""}>上一页</button><span>第 ${page + 1} / ${pages} 页，共 ${total} 点</span><button type="button" data-point-page="next" data-point-kind="${kind}" ${page + 1 >= pages ? "disabled" : ""}>下一页</button>` : `<span>${total} 点</span>`;
   }
-  function renderPoints() { ["yc","yx","yk","yt"].forEach(renderPointKind); renderSummary(); }
+  function renderPoints() { ["yc","yx","yk","yt"].forEach(renderPointKind); renderSummary(); syncSimTargets(); }
   function renderService(status) {
     const item = status || {};
     $("#metric-running").textContent = item.running ? "运行中" : "已停止";
@@ -177,6 +177,7 @@
     const nameFilter = pointNameFilter();
     const switchedRtu = String(state.rtu?.rtu_id) !== String(id);
     if (switchedRtu) {
+      stopSimulation("已切换 RTU");
       state.pages = {yc:0,yx:0,yk:0,yt:0}; state.points = {yc:[],yx:[],yk:[],yt:[]};
       state.totals = {yc:0,yx:0,yk:0,yt:0}; state.channel = null;
       state.unfilteredTotals = {yc:0,yx:0,yk:0,yt:0};
@@ -184,16 +185,19 @@
     }
     state.rtu = state.rtus.find(item => String(item.rtu_id) === String(id)) || null;
     if (!state.rtu) { state.loading = false; refreshStatus("请选择 RTU"); return; }
+    if (typeof window.scadaFocusContext?.set === "function") {
+      window.scadaFocusContext.set({ rtu_id: state.rtu.rtu_id, channel_id: state.rtu.channel_id ?? null });
+    }
     state.loading = true;
     const protocol = protocolFor(state.rtu.channel_type);
     state.protocol = protocol; state.service = protocol.service;
     refreshStatus("正在刷新…", true);
     try {
       const section = activeTestSection();
-      // 后台轮询仅刷新当前激活 Tab 所需数据，避免在日志/通道/连接 Tab 下重复拉取全部四遥点表。
-      const kindsToFetch = (!background || switchedRtu)
+      // 搜索过滤和后台轮询仅刷新当前激活 Tab，避免同时发出 10 个并发点表请求。
+      const kindsToFetch = switchedRtu
         ? Object.keys(state.points)
-        : (section === "points" ? [activePointTab()] : []);
+        : (section === "points" ? [activePointTab()] : (!background ? Object.keys(state.points) : []));
       const pointRequests = Object.fromEntries(kindsToFetch.map(kind => [kind, ++state.pointRequests[kind]]));
       const [channel, points, communications] = await Promise.all([
         (!background || switchedRtu || section === "channel" || !state.channel)
@@ -226,7 +230,8 @@
       message("");
       refreshStatus(`已刷新 ${formatPointTime(Date.now())}`);
     } catch (error) {
-      if (request === state.request) { state.channel = null; message(error.message, true); refreshStatus("刷新失败", false, true); }
+      // 网络抖动时保留既有 channel 信息，仅提示错误而不清空页面内容。
+      if (request === state.request) { message(error.message, true); refreshStatus("刷新失败", false, true); }
     } finally {
       if (request === state.request) state.loading = false;
     }
@@ -247,9 +252,17 @@
       await loadRtu(select.value);
     } catch (error) { message(error.message, true); refreshStatus("刷新失败", false, true); }
   }
+  let actionBusy = false;
   async function serviceAction(action) {
-    if (!state.service || !state.rtu) return;
+    if (!state.service || !state.rtu || actionBusy) return;
+    if (action === "stop" && typeof window.scadaConfirm === "function") {
+      const targetName = state.rtu.name || `RTU ${state.rtu.rtu_id}`;
+      if (!(await window.scadaConfirm(`确认停止 ${targetName} 的规约服务？`, { title: "确认停止", confirmText: "确认停止", danger: true }))) return;
+    }
     const id = state.rtu.rtu_id;
+    const btn = $(action === "start" ? "#service-start" : "#service-stop");
+    actionBusy = true;
+    if (btn) btn.disabled = true;
     try {
       await api(`/api/rtus/${encodeURIComponent(id)}/service/${action}`, {method:"POST", body:"{}"});
       if (String(state.rtu?.rtu_id) !== String(id)) return;
@@ -257,10 +270,14 @@
       if (String(state.rtu?.rtu_id) === String(id)) message(action === "start" ? "规约服务已启动" : "规约服务已停止");
     }
     catch (error) { if (String(state.rtu?.rtu_id) === String(id)) message(error.message, true); }
+    finally { actionBusy = false; if (btn) btn.disabled = false; }
   }
   async function poll() {
-    if (!state.rtu) return;
+    if (!state.rtu || actionBusy) return;
     const id = state.rtu.rtu_id;
+    const btn = $("#service-poll");
+    actionBusy = true;
+    if (btn) btn.disabled = true;
     try {
       await api(`/api/rtus/${encodeURIComponent(id)}/service/poll`, {method:"POST", body:"{}"});
       if (String(state.rtu?.rtu_id) !== String(id)) return;
@@ -268,6 +285,7 @@
       if (String(state.rtu?.rtu_id) === String(id)) message("采集已完成");
     }
     catch (error) { if (String(state.rtu?.rtu_id) === String(id)) message(error.message, true); }
+    finally { actionBusy = false; if (btn) btn.disabled = false; }
   }
   function closePointUpdate() {
     const dialog = $("#point-update-dialog");
@@ -291,7 +309,7 @@
   }
   async function submitPointUpdate() {
     const edit = state.editingPoint;
-    if (!edit) return;
+    if (!edit || actionBusy) return;
     const {kind, pointNo, rtuId} = edit;
     const number = Number($("#point-update-value").value);
     if (!Number.isFinite(number)) { $("#point-update-error").textContent = "请输入有限数字"; return; }
@@ -301,6 +319,10 @@
       $("#point-update-error").textContent = "状态必须是整数";
       return;
     }
+    const submitBtn = $("#point-update-form button[type='submit']");
+    actionBusy = true;
+    if (submitBtn) submitBtn.disabled = true;
+    $("#point-update-error").textContent = "";
     try {
       const path = commandKinds.has(kind) ? `/api/rtus/${rtuId}/commands/${kind}/${encodeURIComponent(pointNo)}` : `/api/rtus/${rtuId}/points/${kind}/${encodeURIComponent(pointNo)}`;
       const result = await api(path, {method:commandKinds.has(kind) ? "POST" : "PATCH", body:JSON.stringify(commandKinds.has(kind) ? {value} : {value, status})});
@@ -308,8 +330,17 @@
         closePointUpdate();
         await loadRtu(rtuId, {fresh:true});
         message(commandKinds.has(kind) ? (result.command_status === "applied" ? "仿真模型已接受指令" : "指令已提交") : "点值已更新");
+        if (commandKinds.has(kind) && typeof window.scadaTrackCommand === "function") {
+          window.scadaTrackCommand({ rtu_id: rtuId, kind, pnt_no: pointNo, value });
+        }
       }
-    } catch (error) { message(error.message, true); }
+    } catch (error) {
+      $("#point-update-error").textContent = error.message || "提交失败";
+      $("#point-update-value")?.focus();
+    } finally {
+      actionBusy = false;
+      if (submitBtn) submitBtn.disabled = false;
+    }
   }
   function initTabs() {
     const showSection = () => {
@@ -347,13 +378,187 @@
   $("#service-start").addEventListener("click", () => serviceAction("start"));
   $("#service-stop").addEventListener("click", () => serviceAction("stop"));
   $("#service-poll").addEventListener("click", poll);
-  $("#point-panels").addEventListener("click", event => { const action = event.target.closest("[data-point-action]"); if (action) openPointUpdate(action.dataset.pointAction, action.dataset.pointNo); const page = event.target.closest("[data-point-page]"); if (page) changePointPage(page.dataset.pointKind, page.dataset.pointPage === "next" ? 1 : -1); });
+  async function quickApplyPointValue(kind, pointNo, rawNumber, {silent = false} = {}) {
+    if (!state.rtu) return false;
+    const rtuId = state.rtu.rtu_id;
+    const number = Number(rawNumber);
+    if (!Number.isFinite(number)) { if (!silent) message("请输入有效数字", true); return false; }
+    const value = (kind === "yx" || kind === "yk") ? (number ? 1 : 0) : number;
+    const current = (state.points[kind] || []).find(p => String(p.pnt_no) === String(pointNo));
+    const status = Number.isInteger(Number(current?.status)) ? Number(current.status) : 0;
+    const isCmd = commandKinds.has(kind);
+    const path = isCmd
+      ? `/api/rtus/${rtuId}/commands/${kind}/${encodeURIComponent(pointNo)}`
+      : `/api/rtus/${rtuId}/points/${kind}/${encodeURIComponent(pointNo)}`;
+    const result = await api(path, {
+      method: isCmd ? "POST" : "PATCH",
+      body: JSON.stringify(isCmd ? {value} : {value, status}),
+    });
+    if (isCmd && typeof window.scadaTrackCommand === "function") {
+      window.scadaTrackCommand({ rtu_id: rtuId, kind, pnt_no: pointNo, value });
+    }
+    if (!silent && String(state.rtu?.rtu_id) === String(rtuId)) {
+      await loadRtu(rtuId, {fresh:true, background:true});
+      message(isCmd ? (result.command_status === "applied" ? "仿真模型已接受指令" : "指令已提交") : `已更新 ${pointLabels[kind]} #${pointNo} = ${value}`);
+    }
+    return true;
+  }
+
+  function startInlineEdit(cell) {
+    if (!cell || cell.classList.contains("val-cell-editing") || !state.rtu) return;
+    const kind = cell.dataset.inlineKind;
+    const pointNo = cell.dataset.inlineNo;
+    const oldVal = cell.dataset.inlineVal ?? cell.textContent.trim();
+    cell.classList.add("val-cell-editing");
+    cell.innerHTML = `<input class="inline-val-input" type="number" step="${(kind === "yx" || kind === "yk") ? "1" : "any"}" value="${esc(oldVal)}" aria-label="修改当前值">`;
+    const input = cell.querySelector("input");
+    if (!input) return;
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = async (commit) => {
+      if (done) return;
+      done = true;
+      const nextVal = input.value.trim();
+      if (!commit || nextVal === "" || nextVal === String(oldVal)) {
+        cell.classList.remove("val-cell-editing");
+        cell.textContent = oldVal;
+        return;
+      }
+      if (!Number.isFinite(Number(nextVal))) {
+        done = false;
+        input.classList.add("is-invalid");
+        return;
+      }
+      cell.classList.remove("val-cell-editing");
+      cell.textContent = nextVal;
+      try {
+        await quickApplyPointValue(kind, pointNo, nextVal);
+      } catch (err) {
+        cell.textContent = oldVal;
+        message(err.message || "更新失败", true);
+      }
+    };
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); finish(true); }
+      else if (ev.key === "Escape") { ev.preventDefault(); finish(false); }
+    });
+    input.addEventListener("blur", () => finish(true));
+  }
+
+  const sim = { timer: null, step: 0, count: 0, busy: false, lastToggle: 0 };
+  function syncSimTargets() {
+    const sel = $("#sim-target");
+    if (!sel) return;
+    const prev = sel.value;
+    const opts = [];
+    for (const k of ["yc", "yx"]) {
+      for (const p of (state.points[k] || [])) {
+        opts.push(`<option value="${esc(k)}:${esc(p.pnt_no)}">${esc(k.toUpperCase())} #${esc(p.pnt_no)} · ${esc(p.name || "未命名")}</option>`);
+      }
+    }
+    sel.innerHTML = opts.length ? opts.join("") : '<option value="">当前页无 YC/YX 测点</option>';
+    if (prev && opts.some(o => o.includes(`value="${esc(prev)}"`))) sel.value = prev;
+  }
+  function updateSimUi(text) {
+    const startBtn = $("#sim-start");
+    const stopBtn = $("#sim-stop");
+    const status = $("#sim-status");
+    const running = Boolean(sim.timer);
+    if (startBtn) startBtn.disabled = running;
+    if (stopBtn) stopBtn.disabled = !running;
+    if (status && text !== undefined) status.textContent = text;
+  }
+  function stopSimulation(reason = "已停止") {
+    if (sim.timer) { clearInterval(sim.timer); sim.timer = null; }
+    sim.busy = false;
+    updateSimUi(reason);
+  }
+  async function runSimTick() {
+    if (!sim.timer || sim.busy || !state.rtu) return;
+    const target = ($("#sim-target")?.value || "").split(":");
+    if (target.length !== 2 || !target[0] || !target[1]) { stopSimulation("请选择目标测点"); return; }
+    const [kind, pointNo] = target;
+    const wave = $("#sim-wave")?.value || "sine";
+    const base = Number($("#sim-base")?.value ?? 50);
+    const amp = Number($("#sim-amp")?.value ?? 10);
+    let nextVal;
+    if (kind === "yx" || wave === "toggle") {
+      sim.lastToggle = sim.lastToggle ? 0 : 1;
+      nextVal = sim.lastToggle;
+    } else if (wave === "ramp") {
+      const phase = (sim.step % 20) / 10;
+      const tri = phase <= 1 ? (phase * 2 - 1) : ((2 - phase) * 2 - 1);
+      nextVal = Number((base + amp * tri).toFixed(3));
+    } else if (wave === "random") {
+      nextVal = Number((base + (Math.random() * 2 - 1) * amp).toFixed(3));
+    } else {
+      nextVal = Number((base + amp * Math.sin(sim.step * Math.PI / 6)).toFixed(3));
+    }
+    sim.step += 1;
+    sim.busy = true;
+    try {
+      await quickApplyPointValue(kind, pointNo, nextVal, {silent: true});
+      sim.count += 1;
+      updateSimUi(`运行中 · 第 ${sim.count} 次 · ${kind.toUpperCase()} #${pointNo} = ${nextVal}`);
+      if (!document.hidden && !document.querySelector(".inline-val-input") && !state.loading) {
+        loadRtu(state.rtu.rtu_id, {background: true});
+      }
+    } catch (err) {
+      stopSimulation(`激励中止：${err.message}`);
+    } finally {
+      sim.busy = false;
+    }
+  }
+  function startSimulation() {
+    if (!state.rtu) { message("请先选择 RTU", true); return; }
+    const target = $("#sim-target")?.value || "";
+    if (!target) { message("当前页无可用 YC/YX 测点", true); return; }
+    stopSimulation();
+    sim.step = 0;
+    sim.count = 0;
+    const intervalMs = Math.max(1000, Number($("#sim-interval")?.value || 2000));
+    sim.timer = setInterval(runSimTick, intervalMs);
+    updateSimUi("启动中…");
+    runSimTick();
+  }
+
+  $("#sim-toggle")?.addEventListener("click", () => {
+    const bar = $("#sim-bar");
+    const btn = $("#sim-toggle");
+    if (!bar) return;
+    const nextHidden = !bar.hidden;
+    bar.hidden = nextHidden;
+    if (btn) btn.setAttribute("aria-expanded", String(!nextHidden));
+    if (!nextHidden) syncSimTargets();
+  });
+  $("#sim-start")?.addEventListener("click", startSimulation);
+  $("#sim-stop")?.addEventListener("click", () => stopSimulation("已手动停止"));
+
+  $("#point-panels").addEventListener("click", async event => {
+    const flip = event.target.closest("[data-yx-flip]");
+    if (flip && state.rtu) {
+      const no = flip.dataset.yxFlip;
+      const cur = (state.points.yx || []).find(p => String(p.pnt_no) === String(no));
+      const next = Number(cur?.value) ? 0 : 1;
+      try { await quickApplyPointValue("yx", no, next); } catch (err) { message(err.message, true); }
+      return;
+    }
+    const action = event.target.closest("[data-point-action]");
+    if (action) openPointUpdate(action.dataset.pointAction, action.dataset.pointNo);
+    const page = event.target.closest("[data-point-page]");
+    if (page) changePointPage(page.dataset.pointKind, page.dataset.pointPage === "next" ? 1 : -1);
+  });
+  $("#point-panels").addEventListener("dblclick", event => {
+    const cell = event.target.closest("td.val-cell-editable");
+    if (cell) startInlineEdit(cell);
+  });
   $("#point-update-form").addEventListener("submit", event => { event.preventDefault(); submitPointUpdate(); });
   $("#point-update-close").addEventListener("click", closePointUpdate);
   $("#point-update-cancel").addEventListener("click", closePointUpdate);
   $("#point-update-dialog").addEventListener("cancel", () => { state.editingPoint = null; });
   initTabs(); loadRtus(); setInterval(() => {
-    if (!document.hidden && state.rtu && !state.loading && activeTestSection() !== "logs") {
+    if (!document.hidden && !document.querySelector("dialog[open]") && !document.querySelector(".inline-val-input") && state.rtu && !state.loading && activeTestSection() !== "logs") {
       loadRtu(state.rtu.rtu_id, {background:true});
     }
   }, 10000);

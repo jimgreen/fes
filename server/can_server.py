@@ -75,6 +75,7 @@ class CanServer(PacketTrace):
         self._stop = threading.Event()
         self._ready = threading.Event()
         self._lock = threading.RLock()
+        self._send_lock = threading.Lock()
         self._lifecycle_lock = threading.RLock()
         self._error: Exception | None = None
         self._frames: deque[dict[str, Any]] = deque(maxlen=500)
@@ -214,13 +215,16 @@ class CanServer(PacketTrace):
                               is_remote_frame=is_remote_frame, dlc=dlc,
                               bitrate_switch=(self.bitrate_switch if bitrate_switch is None
                                               else bool(bitrate_switch)))
-        bus = self._bus
-        try:
-            bus.send(message, timeout=.5)
-            self._trace_can("TX", message)
-        except Exception as exc:
-            self._fail(exc, "CAN 发送失败", bus)
-            raise CanServerError(str(exc)) from exc
+        with self._send_lock:
+            bus = self._bus
+            if bus is None or not self.connected:
+                raise CanServerError("CAN 服务端未启动")
+            try:
+                bus.send(message, timeout=.5)
+                self._trace_can("TX", message)
+            except Exception as exc:
+                self._fail(exc, "CAN 发送失败", bus)
+                raise CanServerError(str(exc)) from exc
         item = self._frame_dict(message, log_direction)
         with self._lock:
             self._frames.append(item)

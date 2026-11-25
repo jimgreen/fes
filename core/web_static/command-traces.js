@@ -13,8 +13,8 @@ if(base.has('rtu_id'))$('rtu').add(new Option('RTU '+base.get('rtu_id'),base.get
 $('rtu').value=base.get('rtu_id')||'';$('kind').value=base.get('kind')||'';
 const controls=['refresh','older','stage','rtu','kind','keyword','from','to','filter','clear'];
 async function json(url,options={}){
- const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout(12000),...options});
- const data=await response.json();if(!response.ok)throw Error(data.error?.message||'HTTP '+response.status);return data;
+ const response=await fetch(url,{cache:'no-cache',signal:AbortSignal.timeout(12000),...options});
+ const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error?.message||'HTTP '+response.status);return data;
 }
 function parameters(){
  const q=new URLSearchParams({view:'summary'});
@@ -37,13 +37,17 @@ function logLink(x){
  if(x.cmd_time)tq.set('q',String(x.cmd_time));
  return '/logs.html'+(tq.size?'?'+tq:'');
 }
-async function load(){
- if(busy)return;busy=true;controls.forEach(id=>$(id).disabled=true);
+const actionControls=['refresh','older','filter','clear'];
+async function load(background=false){
+ if(busy)return;
+ // 后台定时轮询绝不禁用筛选输入框/下拉框，避免打断打字或强行收起下拉/日历面板。
+ busy=true;
+ if(!background)actionControls.forEach(id=>{const el=$(id);if(el)el.disabled=true});
  try{
   const query=parameters();const headers=query===lastQuery&&etag?{'If-None-Match':etag}:{};
-  const response=await fetch('/api/command-traces?'+query,{cache:'no-store',headers,signal:AbortSignal.timeout(12000)});
+  const response=await fetch('/api/command-traces?'+query,{cache:'no-cache',headers,signal:AbortSignal.timeout(12000)});
   if(response.status===304){$('message').textContent='已核对，无新增变化 · '+new Date().toLocaleTimeString();return}
-  const data=await response.json();if(!response.ok)throw Error(data.error?.message||'HTTP '+response.status);
+  const data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error?.message||'HTTP '+response.status);
   component=data.component||component;rows=new Map(data.items.map(x=>[String(x.command_id),x]));
   const html=data.items.map(x=>'<tr><td>'+esc(x.command_id)+'</td><td>'+esc(x.rtu_name||'RTU '+x.rtu_id)+'<small>'+esc(x.point_name||x.kind.toUpperCase()+' / '+x.pnt_no)+'</small></td><td>'+esc(x.value)+'</td><td>'+esc(labels[x.stage]||x.stage)+'<small>'+esc(scopes[x.confirmation_scope]||x.confirmation_scope)+'</small></td><td>'+fmt(x.cmd_time)+'</td><td>'+fmt(x.finish_time)+'</td><td class="command-notes">'+esc(x.feedback_label||x.feedback_state||'未关联回采验证')+
    (x.has_error?' · 有错误，详见记录':'')+(x.review_time?' · 已有人工核对':'')+(x.resolution_time?' · 已人工结案（未重发）':'')+'</td><td class="actions-cell"><div class="process-actions"><button data-detail="'+esc(x.command_id)+'">详情 / 结案</button><a href="'+esc(logLink(x))+'">'+(component==='t'?'转发日志':'相关日志')+'</a><button data-review="'+esc(x.command_id)+'">人工核对</button>'+(component!=='s'?'<button data-rule="'+esc(x.command_id)+'">回采关联</button>':'')+'</div></td></tr>').join('')||'<tr><td colspan="8">暂无指令记录</td></tr>';
@@ -51,7 +55,7 @@ async function load(){
   etag=response.headers.get('ETag')||'';lastQuery=query;next=data.has_more?data.next_before:null;
   $('message').textContent='更新于 '+new Date().toLocaleTimeString();
  }catch(error){$('message').textContent=error.message}
- finally{busy=false;controls.forEach(id=>$(id).disabled=false);$('older').disabled=!next}
+ finally{busy=false;if(!background)actionControls.forEach(id=>{const el=$(id);if(el)el.disabled=false});$('older').disabled=!next}
 }
 function latest(){if(!busy){before=null;load()}}
 $('refresh').onclick=$('filter').onclick=latest;
@@ -184,6 +188,6 @@ $('resolve-form').onsubmit=async event=>{
   detailRow=(await json('/api/command-traces/'+detailRow.command_id)).item;renderDetail(detailRow);latest();
  }catch(error){$('detail-message').textContent=error.message;$('resolve-save').disabled=false}finally{detailBusy=false}
 };
-setInterval(()=>{if(!document.hidden&&!before&&!openingReview&&!document.querySelector('dialog[open]'))load()},5000);
+setInterval(()=>{if(!document.hidden&&!before&&!openingReview&&!document.querySelector('dialog[open]'))load(true)},5000);
 load();initOptions();
 })();

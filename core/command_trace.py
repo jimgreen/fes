@@ -38,6 +38,7 @@ def ensure_schema(con, *, simulator=False):
         ON _scada_command_trace(rtu_id,kind,pnt_no,cmd_time) WHERE stage!='received' ''')
     con.execute('CREATE INDEX IF NOT EXISTS _scada_command_trace_stage ON _scada_command_trace(stage,command_id)')
     con.execute('CREATE INDEX IF NOT EXISTS _scada_command_trace_rtu ON _scada_command_trace(rtu_id,command_id)')
+    con.execute('CREATE INDEX IF NOT EXISTS _scada_command_trace_time ON _scada_command_trace(cmd_time)')
     for kind in ('yk','yt'):
         table=f'fes_{kind}_define'
         for action in ('INSERT','UPDATE OF cmd_time'):
@@ -67,10 +68,12 @@ def claim(store,rtu,kind,no,stamp,value):
             return None
         con.execute('''INSERT OR IGNORE INTO _scada_command_trace(rtu_id,kind,pnt_no,cmd_time,value)
                        VALUES(?,?,?,?,?)''',(rtu,kind,no,stamp,value))
+        # 显式附带 stage!='received' 以命中部分唯一索引 _scada_command_trace_token，避免退化为全 RTU 历史扫描。
         updated=con.execute('''UPDATE _scada_command_trace SET stage='dispatching',dispatch_time=?,owner_pid=?
-                   WHERE rtu_id=? AND kind=? AND pnt_no=? AND cmd_time=? AND stage='queued' ''',
+                   WHERE rtu_id=? AND kind=? AND pnt_no=? AND cmd_time=? AND stage='queued' AND stage!='received' ''',
                    (time.time_ns()//1_000_000,os.getpid(),rtu,kind,no,stamp)).rowcount
-        trace=con.execute('SELECT command_id,stage,finish_time FROM _scada_command_trace WHERE rtu_id=? AND kind=? AND pnt_no=? AND cmd_time=?',
+        trace=con.execute('''SELECT command_id,stage,finish_time FROM _scada_command_trace
+                   WHERE rtu_id=? AND kind=? AND pnt_no=? AND cmd_time=? AND stage!='received' ''',
                           (rtu,kind,no,stamp)).fetchone()
         if updated:
             from core.command_feedback import snapshot_rule
@@ -131,10 +134,13 @@ def resolve_uncertain(store,ident,body):
         if row['stage']!=body['stage'] or row['cmd_time']!=body['cmd_time']:raise ValueError('命令阶段已变化，请刷新')
         blocker=resolution_blocker(row)
         if blocker:raise ValueError(blocker)
+        kind = row['kind']
+        if kind not in ('yk', 'yt'):
+            raise ValueError('命令类型非法，不能结案')
         now=time.time_ns()//1000000
         # The old token must still occupy the point. Never acknowledge a newer
         # command, never mark execution successful, and keep the protocol phase.
-        changed=con.execute(f'''UPDATE fes_{row['kind']}_define SET cmd_handle_time=cmd_time,
+        changed=con.execute(f'''UPDATE fes_{kind}_define SET cmd_handle_time=cmd_time,
             status=3,_version=_version+1 WHERE rtu_id=? AND pnt_no=? AND cmd_time=?
             AND COALESCE(cmd_handle_time,0)<cmd_time''',(row['rtu_id'],row['pnt_no'],row['cmd_time'])).rowcount
         if changed!=1:raise ValueError('点命令槽位已变化或已处理，不能结案')

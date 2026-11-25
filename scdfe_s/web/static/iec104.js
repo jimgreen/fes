@@ -26,8 +26,7 @@
     let pager = table.parentElement.querySelector(".iec104-pager");
     if (!pager) {
       pager = document.createElement("div");
-      pager.className = "iec104-pager";
-      pager.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px;";
+      pager.className = "table-pager iec104-pager";
       pager.innerHTML = '<button type="button" data-iec-page="prev">上一页</button><span data-iec-page-info></span><button type="button" data-iec-page="next">下一页</button>';
       pager.addEventListener("click", ev => {
         const btn = ev.target.closest("button[data-iec-page]");
@@ -139,8 +138,10 @@
   const form = protocolForm(configForm);
   lockProtocolConfiguration(configForm);
   function pointsVisible() {
-    const el = $("#points-body");
-    return Boolean(el && el.offsetParent !== null);
+    const panel = document.querySelector('[data-tab-panel="points"]');
+    if (panel) return !panel.hidden && panel.offsetParent !== null;
+    const body = pointBody();
+    return Boolean(body && body.offsetParent !== null);
   }
   function load(background = false) {
     return form.refresh(() => {
@@ -174,16 +175,30 @@
       message("配置已保存");
     } catch (error) { message(error.message,true); }
   };
+  let actionBusy = false;
   for (const action of ["start","stop"]) $("#" + action).onclick = async () => {
+    if (actionBusy) return;
+    if (action === "stop" && typeof window.scadaConfirm === "function"
+      && !(await window.scadaConfirm("确认停止 IEC104 规约服务？", { title: "确认停止", confirmText: "确认停止", danger: true }))) {
+      return;
+    }
+    actionBusy = true;
+    const btn = $("#" + action);
+    if (btn) btn.disabled = true;
     try {
       await api("/api/iec104/" + action, {method:"POST", body:"{}"});
       await load(false);
       message(action === "start" ? "服务已启动" : "服务已停止");
     } catch (error) { message(error.message,true); }
+    finally { actionBusy = false; if (btn) btn.disabled = false; }
   };
-  $("#refresh").onclick = load;
+  $("#refresh").onclick = () => load(false);
   $("#point-editor-form").onsubmit = async event => {
     event.preventDefault();
+    if (actionBusy) return;
+    const submitBtn = $("#point-editor-form button[type='submit']");
+    actionBusy = true;
+    if (submitBtn) submitBtn.disabled = true;
     try {
       if (!editingPoint) throw new Error("请先选择要编辑的点");
       const kind = editingPoint.kind, input = $("#edit-value").value.trim(), numeric = Number(input);
@@ -200,16 +215,21 @@
       await load(false);
       message("点值已更新");
     } catch (error) { message(error.message,true); }
+    finally { actionBusy = false; if (submitBtn) submitBtn.disabled = false; }
   };
   $("#point-editor-cancel").onclick = closePointEditor;
   $("#full-update").onclick = async () => {
+    if (actionBusy) return;
+    actionBusy = true;
+    $("#full-update").disabled = true;
     try {
       await api("/api/iec104/update/full", {method:"POST", body:JSON.stringify({values:{}})});
       await load(false);
       message("已执行全量更新");
     } catch (error) { message(error.message,true); }
+    finally { actionBusy = false; $("#full-update").disabled = false; }
   };
-  document.querySelectorAll("[data-iec-point-tab]").forEach(tab => tab.addEventListener("click", () => setPointTab(tab.dataset.iecPointTab)));
+  document.querySelectorAll("[data-iec-point-tab]").forEach(tab => tab.addEventListener("click", () => { setPointTab(tab.dataset.iecPointTab); load(true); }));
   document.addEventListener("click", event => {
     const button = event.target.closest("button[data-point-edit]");
     if (button) openPointEditor(pointByKey.get(button.dataset.pointEdit));
@@ -220,5 +240,5 @@
   });
   setPointTab(activeKind);
   load();
-  setInterval(() => { if (!document.hidden) load(true); }, 5000);
+  setInterval(() => { if (!document.hidden && !document.querySelector("dialog[open]")) load(true); }, 5000);
 })();

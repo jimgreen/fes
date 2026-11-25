@@ -103,9 +103,9 @@
       ? AbortSignal.timeout(12000) : undefined;
     const combined = signal && timeoutSignal && typeof AbortSignal.any === "function"
       ? AbortSignal.any([signal, timeoutSignal]) : (signal || timeoutSignal);
-    const response = await fetch(path, {cache: "no-store", signal: combined});
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || data.error || data.message || "读取日志失败");
+    const response = await fetch(path, {cache: "no-cache", signal: combined});
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error?.message || data.error || data.message || `读取日志失败 (HTTP ${response.status})`);
     return data;
   }
   function initFileFilter() {
@@ -364,7 +364,9 @@
       const all = $("scope").value === "all";
       const highlight = highlighter(result.keyword);
       $("content").innerHTML = rows.length ? rows.map((row, i) =>
-        '<div class="lb-line ' + esc(row.level) + '"><span class="lb-line-no">' + (i + 1)
+        '<div class="lb-line ' + esc(row.level) + '" data-line-index="' + i + '" title="'
+        + (row.level === "PACKET" || activeRecord === "packet" ? "点击解析此报文 HEX 结构" : "")
+        + '"><span class="lb-line-no">' + (i + 1)
         + '</span><span class="lb-line-text">' + (all ? '<span class="lb-source">' + esc(row.filename) + "</span>" : "")
         + highlight(row.text) + "</span></div>").join("")
         : '<div class="lb-empty">' + (nextCursor ? "本批扫描范围内没有匹配记录，可继续查看较早一批" : "没有符合筛选条件的记录") + "</div>";
@@ -581,6 +583,60 @@
   for (let node = browser; node; node = node.parentElement)
     visibilityObserver.observe(node, {attributes: true, attributeFilter: ["hidden"]});
   document.addEventListener("visibilitychange", visibilityChanged);
+  // 点击报文行即时调用后端规约译码并在阅读器底部展示结构化中文解析
+  let decodeBar = null;
+  function ensureDecodeBar() {
+    if (decodeBar) return decodeBar;
+    const reader = browser.querySelector(".lb-reader");
+    const foot = reader?.querySelector(".lb-reader-foot");
+    if (!reader || !foot) return null;
+    decodeBar = document.createElement("div");
+    decodeBar.className = "lb-decode-bar";
+    decodeBar.hidden = true;
+    decodeBar.innerHTML =
+      '<div class="lb-decode-head"><strong class="lb-decode-title">报文译码</strong><span class="lb-decode-meta muted"></span><button type="button" class="lb-decode-copy">复制译码</button><button type="button" class="lb-decode-close">收起</button></div>' +
+      '<pre class="lb-decode-body"></pre>';
+    decodeBar.querySelector(".lb-decode-close").onclick = () => {
+      decodeBar.hidden = true;
+      browser.querySelectorAll(".lb-line.is-decoded").forEach(el => el.classList.remove("is-decoded"));
+    };
+    decodeBar.querySelector(".lb-decode-copy").onclick = () => {
+      const text = decodeBar.querySelector(".lb-decode-body")?.textContent || "";
+      if (text && navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {});
+    };
+    reader.insertBefore(decodeBar, foot);
+    return decodeBar;
+  }
+  $("content").addEventListener("click", async event => {
+    const lineEl = event.target?.closest?.(".lb-line[data-line-index]");
+    if (!lineEl) return;
+    const idx = Number(lineEl.dataset.lineIndex);
+    const item = rows[idx];
+    if (!item || (item.level !== "PACKET" && activeRecord !== "packet")) return;
+    const bar = ensureDecodeBar();
+    if (!bar) return;
+    browser.querySelectorAll(".lb-line.is-decoded").forEach(el => el.classList.remove("is-decoded"));
+    lineEl.classList.add("is-decoded");
+    bar.hidden = false;
+    bar.querySelector(".lb-decode-title").textContent = "正在译码…";
+    bar.querySelector(".lb-decode-meta").textContent = "";
+    bar.querySelector(".lb-decode-body").textContent = item.text || "";
+    try {
+      const resp = await fetch("/api/packet-decode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ line: item.text || "" }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error?.message || `HTTP ${resp.status}`);
+      bar.querySelector(".lb-decode-title").textContent = `${data.protocol} · ${data.direction}`;
+      bar.querySelector(".lb-decode-meta").textContent = `${data.byte_count} 字节`;
+      bar.querySelector(".lb-decode-body").textContent = `${data.decoded}\nHEX: ${data.hex}`;
+    } catch (err) {
+      bar.querySelector(".lb-decode-title").textContent = "译码提示";
+      bar.querySelector(".lb-decode-body").textContent = err.message || "无法解析该行报文";
+    }
+  });
   setInterval(() => { if (visible()) refresh(true); }, 5000);
   refresh();
 })();

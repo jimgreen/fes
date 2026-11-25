@@ -58,7 +58,7 @@ def ensure_schema(connection, *, simulator=False):
                 ON m.channel_id=r.channel_id AND m.kind='yx' AND m.pnt_no=NEW.pnt_no
               WHERE r.rtu_id=NEW.rtu_id AND r.channel_type='iec104'
                 AND (m.type_id IN (30,31) OR
-                     (m.type_id IN (1,2,3) AND m.time_tag='CP56Time2a'));
+                     (m.type_id IN (1,2,3) AND REPLACE(UPPER(COALESCE(m.time_tag,'')),'-','')='CP56TIME2A'));
             END''')
 
 
@@ -109,10 +109,17 @@ def _cp56(row):
         raw = bytes.fromhex(row['cp56_hex'])
         if len(raw) != 7: raise ValueError('CP56 长度必须为 7')
         return raw
-    stamp = datetime.fromtimestamp(row['event_time_ms']/1000, timezone.utc)
+    ts_ms = row.get('event_time_ms')
+    time_invalid = bool(row.get('time_invalid'))
+    if ts_ms is None:
+        ts_ms = row.get('received_time_ms')
+        if ts_ms is None:
+            ts_ms = int(time.time() * 1000)
+        time_invalid = True
+    stamp = datetime.fromtimestamp(ts_ms/1000, timezone.utc)
     if not 2000 <= stamp.year <= 2099: raise ValueError('CP56 年份超出 2000..2099')
     ms = stamp.second*1000+stamp.microsecond//1000
-    return ms.to_bytes(2,'little') + bytes((stamp.minute | (128 if row.get('time_invalid') else 0)
+    return ms.to_bytes(2,'little') + bytes((stamp.minute | (128 if time_invalid else 0)
         | (64 if row.get('time_substituted') else 0),
         stamp.hour | (128 if row.get('summer') else 0),
         stamp.day | (stamp.isoweekday()<<5),stamp.month,stamp.year-2000))
@@ -296,12 +303,25 @@ class SoeForwarder:
         self.last_event_id = target
 
     def _maybe_prune_acked(self, now_ms: int) -> None:
-        """低频安全老化清理：仅删除所有已注册消费者均已确认且超过保留期/保留上限的旧 SOE 记录。"""
+        """低频安全老化清理：仅删除同 origin 下所有活跃消费者均已确认且超期的旧 SOE，分批限量防长锁。"""
         now_m = time.monotonic()
         if now_m < getattr(self, '_next_prune_at', 0.0):
             return
         self._next_prune_at = now_m + 600.0
         try:
+            # 若存在尚未注册游标的已启用 IEC104 转发通道，跳过清理防止误删未消费 SOE。
+            has_t_table = self.connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='fes_scdfe_t_define'"
+            ).fetchone() is not None
+            if has_t_table and self.origin == 'C':
+                enabled_t = self.connection.execute(
+                    "SELECT COUNT(*) FROM fes_scdfe_t_define WHERE LOWER(COALESCE(protocol,''))='iec104' AND COALESCE(process_enable,0)!=0"
+                ).fetchone()[0]
+                registered_t = self.connection.execute(
+                    "SELECT COUNT(*) FROM _scada_iec104_soe_cursor WHERE consumer LIKE 'T:%'"
+                ).fetchone()[0]
+                if enabled_t > registered_t:
+                    return
             row = self.connection.execute(
                 'SELECT MIN(last_event_id) FROM _scada_iec104_soe_cursor'
             ).fetchone()
@@ -310,12 +330,15 @@ class SoeForwarder:
             safe_floor = int(row[0])
             if safe_floor <= 0:
                 return
-            # 保留 7 天内已确认记录，且至少保留最近 50,000 个 event_id 以便人工审计排障。
+            # 保留 7 天内已确认记录，且至少保留最近 50,000 个 event_id 以便人工审计排障；单次限量 1000 防长事务锁库。
             cutoff_ms = now_ms - 7 * 86400 * 1000
             id_floor = max(0, safe_floor - 50000)
             self.connection.execute(
-                'DELETE FROM _scada_iec104_soe WHERE event_id <= ? AND (received_time_ms < ? OR event_id <= ?)',
-                (safe_floor, cutoff_ms, id_floor),
+                'DELETE FROM _scada_iec104_soe WHERE event_id IN ('
+                'SELECT event_id FROM _scada_iec104_soe '
+                'WHERE origin=? AND event_id <= ? AND (received_time_ms < ? OR event_id <= ?) '
+                'ORDER BY event_id LIMIT 1000)',
+                (self.origin, safe_floor, cutoff_ms, id_floor),
             )
         except sqlite3.Error:
             pass

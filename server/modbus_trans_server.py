@@ -217,7 +217,7 @@ class ModbusTcpTransServer(ModbusTcpServer):
             value = raw_value if type(raw_value) is int else int(round(raw_value))
             if dtype.startswith("uint") and value < 0:
                 value = 0
-            payload = value.to_bytes(2, "big", signed=dtype in {"int16"})
+            payload = value.to_bytes(2, "big", signed=dtype in {"int16", "int"})
         if row["byte_order"] == "little":
             payload = payload[::-1]
         if len(payload) == 2:

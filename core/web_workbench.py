@@ -28,6 +28,7 @@ NAV_ICONS = {
     "▦": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
     "▥": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
     "▧": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="m14.7 6.3 3 3L8 19H5v-3l9.7-9.7z"/><path d="M12 20h9"/></svg>',
+    "⇶": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M4 7h12m0 0-3-3m3 3-3 3M4 17h12m0 0-3-3m3 3-3 3M20 4v16"/></svg>',
 }
 
 
@@ -35,24 +36,24 @@ def _nav_icon(symbol: str) -> str:
     return NAV_ICONS.get(symbol, escape(symbol))
 
 POINT_TRENDS_PAGE = ("point-trends.html", "/point-trends", "∿", "采样管理", "管理实时曲线采样与历史")
+POINT_TRACE_PAGE = ("point-trace.html", "/point-trace", "⇶", "全链路对账", "C 采集与 T 转发四遥全链路实时对账")
 
 S_PAGES = [
     ("运行管理", [
-        ("command-traces.html", "/command-traces", "↗", "指令追踪", "入库、选择、执行与确认阶段"),
-        ("diagnostics.html", "/diagnostics", "◴", "运行诊断", "分段耗时与启动配置检查"),
-        ("processes.html", "/processes", "▤", "进程监控", "按通信通道展示进程、PID、心跳和运行状态"),
-        ("communication.html", "/communication", "◉", "通信监控", "连接、测点数量与通道状态"),
+        ("communication.html", "/communication", "◉", "通道与进程监控", "统一展示通道通信、进程状态、PID、心跳与启停"),
+        ("logs.html", "/logs", "≡", "日志报文", "按通信通道浏览运行日志和收发报文"),
         ("connections.html", "/connections", "⇄", "客户端连接", "按连接查看客户端、交互内容、日志与报文"),
         ("soe.html", "/soe", "◷", "SOE 事件", "逐次变位、源时标与转发进度"),
-        ("logs.html", "/logs", "≡", "日志报文", "按通信通道浏览运行日志和收发报文"),
+        ("command-traces.html", "/command-traces", "↗", "指令追踪", "入库、选择、执行与确认阶段"),
         POINT_TRENDS_PAGE,
+        ("diagnostics.html", "/diagnostics", "◴", "运行诊断", "分段耗时、配置检查与操作审计"),
     ]),
     ("数据与定义", [
         ("channels.html", "/channels", "▦", "通道数据", "维护 RTU、通道和规约定义"),
         ("points.html", "/points", "▥", "四遥数据", "按通道维护遥测、遥信、遥控和遥调"),
     ]),
     ("通信测试", [
-        ("test.html", "/test", "▧", "通信测试", "按 RTU 自动匹配规约、四遥、连接和日志"),
+        ("test.html", "/test", "▧", "通信测试", "按 RTU 自动匹配规约、四遥、仿真激励、连接和日志"),
     ]),
 ]
 S_TEST_SECTIONS = (
@@ -61,13 +62,14 @@ S_TEST_SECTIONS = (
 )
 C_PAGES = [
     ("运行管理", [
+        ("scdfe", "/#scdfe", "◉", "通信监控", "通道通信状态与核心服务"),
         ("processes", "/#processes", "▤", "进程监控", "进程与运行状态"),
-        ("scdfe", "/#scdfe", "◉", "通信监控", "通道通信状态"),
-        ("logs", "/#logs", "≡", "运行日志", "运行日志与报文"),
+        ("logs", "/#logs", "≡", "日志报文", "运行日志与报文"),
         ("soe.html", "/soe", "◷", "SOE 事件", "逐次变位、源时标与转发进度"),
-        ("diagnostics.html", "/diagnostics", "◴", "运行诊断", "分段耗时与启动配置检查"),
         ("command-traces.html", "/command-traces", "↗", "指令追踪", "入库、派发与确认阶段"),
         POINT_TRENDS_PAGE,
+        POINT_TRACE_PAGE,
+        ("diagnostics.html", "/diagnostics", "◴", "运行诊断", "分段耗时、配置检查与操作审计"),
     ]),
     ("数据与定义", [
         ("data", "/#data", "▦", "数据与定义", "通道、RTU 和四遥定义"),
@@ -80,18 +82,18 @@ C_DATA_SECTIONS = (
 )
 T_PAGES = [
     ("运行管理", [
-        ("command-traces.html", "/command-traces", "↗", "指令追踪", "共享业务库中的命令派发与确认阶段"),
-        ("diagnostics.html", "/diagnostics", "◴", "运行诊断", "分段耗时与启动配置检查"),
-        ("processes.html", "/processes.html", "▤", "进程监控", "转发进程的启停、心跳和运行状态"),
-        ("communication.html", "/communication.html", "◉", "通信监控", "转发通道的监听地址与通信状态"),
+        ("communication.html", "/communication", "◉", "通道与进程监控", "统一展示转发通道监听状态、PID、心跳与启停"),
+        ("logs.html", "/logs", "≡", "日志报文", "按年月日小时浏览运行日志和收发报文文件"),
         ("connections.html", "/connections", "⇄", "客户端连接", "按连接查看客户端、交互内容、日志与报文"),
         ("soe.html", "/soe", "◷", "SOE 事件", "源事件历史与转发确认进度"),
-        ("logs.html", "/logs.html", "≡", "日志报文", "按年月日小时浏览运行日志和收发报文文件"),
+        ("command-traces.html", "/command-traces", "↗", "指令追踪", "共享业务库中的命令派发与确认阶段"),
         POINT_TRENDS_PAGE,
+        POINT_TRACE_PAGE,
+        ("diagnostics.html", "/diagnostics", "◴", "运行诊断", "分段耗时、配置检查与操作审计"),
     ]),
     ("数据与定义", [
-        ("channels.html", "/channels.html", "▦", "通道数据", "维护转发通道、规约和监听参数"),
-        ("points.html", "/points.html", "▥", "四遥数据", "按通道维护四遥点及源测点映射"),
+        ("channels.html", "/channels", "▦", "通道数据", "维护转发通道、规约和监听参数"),
+        ("points.html", "/points", "▥", "四遥数据", "按通道维护四遥点及源测点映射"),
     ]),
 ]
 
@@ -99,7 +101,11 @@ T_PAGES = [
 def render_workbench(data: bytes, module: str, filename: str) -> bytes:
     """Wrap our trusted static templates; page controls/scripts stay intact."""
     groups = {"s": S_PAGES, "c": C_PAGES, "t": T_PAGES}[module]
-    active = "communication.html" if module == "t" and filename == "index.html" else filename
+    active = (
+        "communication.html"
+        if (module in ("s", "t") and filename in ("index.html", "processes.html"))
+        else filename
+    )
     page = next((item for _, items in groups for item in items if item[0] == active),
                 (filename, "/api-docs", "?", "接口文档", "通信服务接口说明"))
     links = []
@@ -146,7 +152,8 @@ def render_workbench(data: bytes, module: str, filename: str) -> bytes:
     sidebar = f'''<aside class="workbench-sidebar" aria-label="功能目录">
 <nav aria-label="主导航">{''.join(links)}</nav></aside>'''
     html = data.decode("utf-8")
-    html = html.replace("<html ", '<html data-theme="minimalist-light" ', 1)
+    if "data-theme=" not in html[:256]:
+        html = html.replace("<html ", '<html data-theme="minimalist-light" ', 1)
     html = html.replace("<head>", '<head><script src="/static/audit-client.js"></script>', 1)
     head_extra = '<link rel="stylesheet" href="/static/workbench.css"><link rel="stylesheet" href="/static/database-selector.css">'
     if "/static/ui-theme.css" not in html:

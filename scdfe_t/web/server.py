@@ -209,8 +209,17 @@ class TransHandler(BaseScadaHandlerMixin, RequestBodyMixin, BaseHTTPRequestHandl
         raise ApiError(405, "点映射只支持 PATCH/DELETE")
 
     def _static(self, parts):
-        # 默认首页统一渲染 communication.html，消除旧 index.html 8/10 列错位。
+        # 默认首页统一渲染 communication.html，同时兼容无 .html 后缀的统一工作台路由。
+        clean_aliases = {
+            "communication": "communication.html",
+            "processes": "processes.html",
+            "logs": "logs.html",
+            "channels": "channels.html",
+            "points": "points.html",
+        }
         name = "communication.html" if (not parts or parts == ["index.html"]) else "/".join(parts)
+        if name in clean_aliases:
+            name = clean_aliases[name]
         if parts and parts[0] == "static":
             name = "/".join(parts[1:])
             if name == "index.html":

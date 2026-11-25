@@ -1,7 +1,7 @@
 "use strict";
 const $=s=>document.querySelector(s);
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#39;"}[c]));
-const state={channels:[],points:[],selected:new URLSearchParams(location.search).get("channel_id")||null,logs:[],log:null,logRecord:"runtime",page:"channels",edit:null,batch:false,sourceCatalog:null,pointOffset:0,pointLimit:100,pointTotal:0,pointRequest:0,pointLoading:false,pointReloadPending:false};
+const state={channels:[],points:[],selected:new URLSearchParams(location.search).get("channel_id")||null,logs:[],log:null,logRecord:"runtime",page:"channels",edit:null,batch:false,batchExisting:[],sourceCatalog:null,pointOffset:0,pointLimit:100,pointTotal:0,pointRequest:0,pointLoading:false,pointReloadPending:false};
 const kindName={yc:"遥测",yx:"遥信",yk:"遥控",yt:"遥调"};
 const pointKinds=Object.keys(kindName);
 function activePointKind(){return $("#kind-filter")?.value||"yc"}
@@ -39,7 +39,7 @@ function renderChannels() {
   const rows = state.channels;
   $("#channel-count").textContent = `${rows.length} 个通道`;
   $("#summary").textContent = `运行 ${rows.filter(x => x.runtime_status?.state === "running" || Number(x.runtime_status?.running) === 1 || Number(x.process_status) === 2).length} / 总数 ${rows.length}`;
-  const markup = rows.length ? rows.map(x => { const r=x.runtime_status||{}; const d=r.diagnostic||{}; return `<tr class="${id(x) === state.selected ? "selected" : ""}" data-select="${id(x)}"><td>${id(x)}</td><td>${esc(x.name)}</td><td>${esc(x.protocol)}</td><td>${runtimeBadge(r)}</td><td>${esc(r.connection_state || "—")}</td><td class="mono">${esc([r.rx_count||0,r.tx_count||0,r.error_count||0,r.reconnect_count||0].join(" / "))}</td><td class="mono">${esc(fmt(r.process_heartbeat_time||x.process_heartbeat_time,true))}<small class="cell-sub">${esc(fmt(r.sampled_at,true))}</small></td><td title="${esc(JSON.stringify(d))}">${esc(Object.keys(d).length ? `${Object.keys(d).length} 项` : "—")}<small class="cell-sub">${esc(r.last_error||x.process_error||"")}</small></td><td class="actions"><a href="/points.html?channel_id=${id(x)}">四遥数据</a><a href="/logs.html?channel_id=${id(x)}">日志报文</a><button data-edit="${id(x)}">编辑</button><button data-version="${esc(x._version)}" data-delete="${id(x)}" class="danger">删除</button></td></tr>`; }).join("") : '<tr><td colspan="9" class="muted">暂无转发通道</td></tr>';
+  const markup = rows.length ? rows.map(x => { const r=x.runtime_status||{}; const d=r.diagnostic||{}; return `<tr class="${id(x) === state.selected ? "selected" : ""}" data-select="${id(x)}"><td>${id(x)}</td><td>${esc(x.name)}</td><td>${esc(x.protocol)}</td><td>${runtimeBadge(r)}</td><td>${esc(r.connection_state || "—")}</td><td class="mono">${esc([r.rx_count||0,r.tx_count||0,r.error_count||0,r.reconnect_count||0].join(" / "))}</td><td class="mono">${esc(fmt(r.process_heartbeat_time||x.process_heartbeat_time,true))}<small class="cell-sub">${esc(fmt(r.sampled_at,true))}</small></td><td title="${esc(JSON.stringify(d))}">${esc(Object.keys(d).length ? `${Object.keys(d).length} 项` : "—")}<small class="cell-sub">${esc(r.last_error||x.process_error||"")}</small></td><td class="actions"><a href="/points?channel_id=${id(x)}">四遥数据</a><a href="/logs?channel_id=${id(x)}">日志报文</a><button data-edit="${id(x)}">编辑</button><button data-version="${esc(x._version)}" data-delete="${id(x)}" class="danger">删除</button></td></tr>`; }).join("") : '<tr><td colspan="9" class="muted">暂无转发通道</td></tr>';
   // Heartbeats and counters change on every poll. Preserve action nodes and
   // their focus while updating cells; a changed row identity rebuilds safely.
   if (body._channelMarkup !== markup) {
@@ -71,7 +71,7 @@ function renderChannels() {
   }
   renderSelects(); renderDetail();
 }
-function renderDetail(){if(!$("#channel-detail"))return;const x=selected();if(!x){$("#channel-detail").innerHTML='<dt>通道</dt><dd>未选择</dd>';return}const protocol=String(x.protocol||"").toLowerCase(),r=x.runtime_status||{};const common={channel_id:"编号",name:"名称",protocol:"规约",bind_host:"监听地址",bind_port:"监听端口",scan_interval_ms:"读取周期(ms)",log_retention_hours:"日志保留小时",packet_recording:"保存报文",process_enable:"自动运行",process_pid:"进程号",process_start_time:"启动时间",process_stop_time:"停止时间",process_heartbeat_time:"心跳",process_error:"错误"};const specific=protocol==="iec104"?{common_address:"IEC104 公共地址",report_interval_ms:"全量上送周期(ms)"}:{unit_id:"Modbus 从站地址"};const n={...common,...specific};const fields=Object.entries(n).filter(([k])=>k in x).map(([k,v])=>`<dt>${v}</dt><dd>${k.includes("time")?fmt(x[k],k.includes("heartbeat")):k==="process_enable"||k==="packet_recording"?(Number(x[k])?"是":"否"):esc(x[k])||"—"}`).join("");$("#channel-detail").innerHTML=fields+`<dt>运行状态</dt><dd>${runtimeBadge(r)}</dd><dt>连接状态</dt><dd>${esc(r.connection_state||"—")}</dd><dt>收/发/错/重连</dt><dd class="mono">${esc([r.rx_count||0,r.tx_count||0,r.error_count||0,r.reconnect_count||0].join(" / "))}</dd><dt>最近错误</dt><dd>${esc(r.last_error||"—")}</dd><dt>诊断</dt><dd class="mono">${esc(JSON.stringify(r.diagnostic||{}))}</dd>`}
+function renderDetail(){if(!$("#channel-detail"))return;const x=selected();if(!x){$("#channel-detail").innerHTML='<dt>通道</dt><dd>未选择</dd>';return}const protocol=String(x.protocol||"").toLowerCase(),r=x.runtime_status||{};const common={channel_id:"编号",name:"名称",protocol:"规约",bind_host:"监听地址",bind_port:"监听端口",scan_interval_ms:"读取周期(ms)",log_retention_hours:"日志保留小时",packet_recording:"保存报文",process_enable:"自动运行",process_pid:"进程号",process_start_time:"启动时间",process_stop_time:"停止时间",process_heartbeat_time:"心跳",process_error:"错误"};const specific=protocol==="iec104"?{common_address:"IEC104 公共地址",report_interval_ms:"全量上送周期(ms)"}:{unit_id:"Modbus 从站地址"};const n={...common,...specific};const fields=Object.entries(n).filter(([k])=>k in x).map(([k,v])=>`<dt>${v}</dt><dd>${k.includes("time")?esc(fmt(x[k],k.includes("heartbeat"))):k==="process_enable"||k==="packet_recording"?(Number(x[k])?"是":"否"):esc(x[k])||"—"}</dd>`).join("");$("#channel-detail").innerHTML=fields+`<dt>运行状态</dt><dd>${runtimeBadge(r)}</dd><dt>连接状态</dt><dd>${esc(r.connection_state||"—")}</dd><dt>收/发/错/重连</dt><dd class="mono">${esc([r.rx_count||0,r.tx_count||0,r.error_count||0,r.reconnect_count||0].join(" / "))}</dd><dt>最近错误</dt><dd>${esc(r.last_error||"—")}</dd><dt>诊断</dt><dd class="mono">${esc(JSON.stringify(r.diagnostic||{}))}</dd>`}
 function pno(x){return x.pnt_no??0}
 const pointTrendHost = $("#point-trend");
 const pointTrend = pointTrendHost ? window.scadaPointTrend?.mount(pointTrendHost) : null;
@@ -186,8 +186,8 @@ function loadProcesses({fresh=false}={}){
   pendingProcesses=fetchProcesses().finally(()=>{pendingProcesses=null});
   return pendingProcesses;
 }
-async function fetchProcesses(){const r=(await api("/api/trans/processes")).items||[];$("#process-summary").textContent=`运行 ${r.filter(x=>x.alive).length} / 总数 ${r.length}`;const html=r.length?r.map(x=>`<tr><td>${id(x)} · ${esc(x.name||"")}</td><td>${esc(x.protocol)}</td><td>${badge(x)}</td><td>${x.process_pid||"—"}</td><td>${fmt(x.process_start_time)}</td><td>${fmt(x.process_heartbeat_time,true)}</td><td title="${esc(x.process_error)}">${esc(x.process_error)||"—"}</td><td class="actions"><button data-control="start" data-id="${id(x)}">启动</button><button data-control="stop" data-id="${id(x)}">停止</button><button data-log-channel="${id(x)}">日志</button></td></tr>`).join(""):'<tr><td colspan="8" class="muted">暂无通道</td></tr>';if(html!==previousProcessesHtml){$("#processes").innerHTML=html;previousProcessesHtml=html}}
-async function loadLogs(){const c=$("#log-channel")?.value||"";state.logsChannel=c;const q=new URLSearchParams({record:state.logRecord||"runtime"});if(c)q.set("channel_id",c);const v=await api(`/api/trans/logs?${q}`);state.logs=v.items||[];$("#log-count").textContent=`${v.total||0} 个文件`;$("#log-files").innerHTML=state.logs.map(x=>`<button class="log-file ${state.log===x.filename?"active":""}" data-log="${esc(x.filename)}">${esc(x.filename)}<small>${(x.size/1024).toFixed(1)} KB · ${fmt(x.mtime)}</small></button>`).join("")||'<div class="muted">暂无日志</div>';if(state.log&&!state.logs.some(x=>x.filename===state.log))state.log=null;if(!state.log&&state.logs.length)state.log=state.logs[0].filename;if(state.log)await loadLog();else {$("#log-name").textContent="请选择日志文件";$("#log-content").textContent="—"}}
+async function fetchProcesses(){const r=(await api("/api/trans/processes")).items||[];$("#process-summary").textContent=`运行 ${r.filter(x=>x.alive).length} / 总数 ${r.length}`;const html=r.length?r.map(x=>`<tr><td>${esc(id(x))} · ${esc(x.name||"")}</td><td>${esc(x.protocol)}</td><td>${badge(x)}</td><td>${esc(x.process_pid||"—")}</td><td>${esc(fmt(x.process_start_time))}</td><td>${esc(fmt(x.process_heartbeat_time,true))}</td><td title="${esc(x.process_error)}">${esc(x.process_error)||"—"}</td><td class="actions"><button data-control="start" data-id="${esc(id(x))}">启动</button><button class="danger" data-control="stop" data-id="${esc(id(x))}">停止</button><button data-log-channel="${esc(id(x))}">日志</button></td></tr>`).join(""):'<tr><td colspan="8" class="muted">暂无通道</td></tr>';if(html!==previousProcessesHtml){$("#processes").innerHTML=html;previousProcessesHtml=html}}
+async function loadLogs(){const c=$("#log-channel")?.value||"";state.logsChannel=c;const q=new URLSearchParams({record:state.logRecord||"runtime"});if(c)q.set("channel_id",c);const v=await api(`/api/trans/logs?${q}`);state.logs=v.items||[];$("#log-count").textContent=`${v.total||0} 个文件`;$("#log-files").innerHTML=state.logs.map(x=>`<button class="log-file ${state.log===x.filename?"active":""}" data-log="${esc(x.filename)}">${esc(x.filename)}<small>${(x.size/1024).toFixed(1)} KB · ${esc(fmt(x.mtime))}</small></button>`).join("")||'<div class="muted">暂无日志</div>';if(state.log&&!state.logs.some(x=>x.filename===state.log))state.log=null;if(!state.log&&state.logs.length)state.log=state.logs[0].filename;if(state.log)await loadLog();else {$("#log-name").textContent="请选择日志文件";$("#log-content").textContent="—"}}
 async function loadLog(){if(!state.log)return;const q=new URLSearchParams({filename:state.log,tail:"2000",record:state.logRecord||"runtime"}),v=await api(`/api/trans/log?${q}`),k=$("#log-keyword")?.value.trim().toLowerCase()||"";$("#log-name").textContent=state.log;$("#log-content").textContent=(v.lines||[]).filter(x=>!k||x.toLowerCase().includes(k)).join("\n")||"（没有匹配内容）";document.querySelectorAll(".log-file").forEach(e=>e.classList.toggle("active",e.dataset.log===state.log))}
 const channelCommonFields=[["name","名称","text"],["protocol","规约","protocol"],["bind_host","监听地址","text"],["bind_port","监听端口","number"],["scan_interval_ms","读取周期(ms)","number"],["log_retention_hours","日志保留小时","number"],["packet_recording","保存报文","bool"],["process_enable","自动运行","bool"]];
 const channelProtocolFields={"iec104":[["common_address","IEC104 公共地址","number"],["report_interval_ms","全量上送周期(ms)","number"],["k","发送窗口 k","number"],["w","接收确认窗口 w","number"],["t1","确认超时 t1(s)","float"],["t2","延迟确认 t2(s)","float"],["t3","空闲测试 t3(s)","float"],["max_asdu_length","ASDU 长度阈值","number"]],"modbus-tcp":[["unit_id","Modbus 从站地址","number"]]};
@@ -258,14 +258,158 @@ function setPointSourceControls(batch){
   rtu.outerHTML='<select name="source_rtu_id" required></select>';
   point.outerHTML=`<select name="source_pnt_no" ${batch?'multiple size="8" required':'required'}></select>`;
 }
+function modbusWordWidth(dtype){
+  const t=String(dtype||"").toLowerCase();
+  if(["float64","int64","uint64"].includes(t))return 4;
+  if(["float32","int32","uint32"].includes(t))return 2;
+  return 1;
+}
+function defaultBatchStep(){
+  const protocol=editorProtocol();
+  if(protocol==="iec104")return 1;
+  const area=String($("#editor-fields [name=\"register_area\"]")?.value||"holding").toLowerCase();
+  if(area==="coil"||area==="discrete")return 1;
+  return modbusWordWidth($("#editor-fields [name=\"data_type\"]")?.value);
+}
+async function loadBatchExisting(){
+  state.batchExisting=[];
+  if(!state.batch||!state.selected)return;
+  try{
+    const res=await api(`/api/trans/channels/${state.selected}/points?limit=2000&offset=0`);
+    state.batchExisting=res.items||[];
+    updateBatchPreview();
+  }catch(_){state.batchExisting=[];}
+}
+function buildBatchPlan(values){
+  const pointSelect=$("#editor-fields [name=\"source_pnt_no\"]");
+  const selectedOpts=Array.from(pointSelect?.selectedOptions||[]).filter(o=>o.value);
+  const protocol=editorProtocol();
+  const stepInput=$("#batch-addr-step");
+  const stepRaw=stepInput?Number(stepInput.value):defaultBatchStep();
+  const step=Number.isFinite(stepRaw)&&stepRaw>=0?Math.trunc(stepRaw):defaultBatchStep();
+  const startPntRaw=$("#batch-start-pnt")?.value?.trim()||"";
+  const startPnt=startPntRaw!==""&&Number.isFinite(Number(startPntRaw))?Math.trunc(Number(startPntRaw)):null;
+  const autoName=Boolean($("#batch-auto-name")?.checked);
+  const startAddr=protocol==="iec104"?Number(values.io_address??0):Number(values.address??0);
+  const width=protocol==="iec104"?1:(["coil","discrete"].includes(String(values.register_area||"holding"))?1:modbusWordWidth(values.data_type));
+  const area=String(values.register_area||"holding").toLowerCase();
+  const catalogByNo=new Map((state.sourceCatalog?.items||[]).map(x=>[String(x.pnt_no),x]));
+  const items=[];
+  const plannedKeys=new Map();
+  const conflicts=[];
+  const existingMap=new Map();
+  for(const row of state.batchExisting){
+    if(protocol==="iec104"){
+      if(row.io_address!=null)existingMap.set(`ioa:${row.io_address}`,row);
+    }else{
+      const rArea=String(row.register_area||"holding").toLowerCase();
+      const rWidth=["coil","discrete"].includes(rArea)?1:modbusWordWidth(row.data_type);
+      const base=Number(row.address);
+      if(Number.isFinite(base)){
+        for(let w=0;w<rWidth;w++)existingMap.set(`${rArea}:${base+w}`,row);
+      }
+    }
+  }
+  selectedOpts.forEach((opt,idx)=>{
+    const srcNo=opt.value;
+    const addr=Number.isFinite(startAddr)?startAddr+idx*step:0;
+    const item={...values,source_rtu_id:values.source_rtu_id,source_pnt_no:srcNo};
+    delete item.pnt_no;
+    if(startPnt!==null&&startPnt>0)item.pnt_no=startPnt+idx;
+    if(protocol==="iec104")item.io_address=addr;
+    else item.address=addr;
+    if(autoName&&!values.name){
+      const srcInfo=catalogByNo.get(String(srcNo));
+      if(srcInfo&&srcInfo.name)item.name=srcInfo.name;
+    }
+    if(protocol==="iec104"){
+      const key=`ioa:${addr}`;
+      if(plannedKeys.has(key))conflicts.push(`批次内 IOA ${addr} 重复`);
+      else if(existingMap.has(key))conflicts.push(`IOA ${addr} 已被点 #${existingMap.get(key).pnt_no} 占用`);
+      plannedKeys.set(key,idx);
+    }else{
+      for(let w=0;w<width;w++){
+        const key=`${area}:${addr+w}`;
+        if(plannedKeys.has(key)){conflicts.push(`批次内 ${area} 地址 ${addr+w} 重叠`);break;}
+        if(existingMap.has(key)){conflicts.push(`${area} 地址 ${addr+w} 已被点 #${existingMap.get(key).pnt_no} 占用`);break;}
+        plannedKeys.set(key,idx);
+      }
+    }
+    items.push(item);
+  });
+  return {items,conflicts,protocol,step,startAddr,area};
+}
+function applyNextFreeBatchAddress(){
+  if(!state.batch)return;
+  const protocol=editorProtocol();
+  const kind=sourceKind();
+  const step=defaultBatchStep();
+  const stepEl=$("#batch-addr-step");
+  if(stepEl)stepEl.value=String(step);
+  let maxPnt=0;
+  for(const row of state.batchExisting){
+    if(row.kind===kind)maxPnt=Math.max(maxPnt,Number(row.pnt_no||0));
+  }
+  const startPntEl=$("#batch-start-pnt");
+  if(startPntEl)startPntEl.value=String(maxPnt+1);
+  if(protocol==="iec104"){
+    let maxIoa=-1;
+    for(const row of state.batchExisting){
+      if(row.io_address!=null)maxIoa=Math.max(maxIoa,Number(row.io_address));
+    }
+    const ioaEl=$("#editor-fields [name=\"io_address\"]");
+    if(ioaEl)ioaEl.value=String(maxIoa>=0?maxIoa+1:1);
+  }else{
+    const area=String($("#editor-fields [name=\"register_area\"]")?.value||"holding").toLowerCase();
+    let nextAddr=0;
+    for(const row of state.batchExisting){
+      if(String(row.register_area||"holding").toLowerCase()!==area)continue;
+      const w=["coil","discrete"].includes(area)?1:modbusWordWidth(row.data_type);
+      nextAddr=Math.max(nextAddr,Number(row.address||0)+w);
+    }
+    const addrEl=$("#editor-fields [name=\"address\"]");
+    if(addrEl)addrEl.value=String(nextAddr);
+  }
+  updateBatchPreview();
+}
+function updateBatchPreview(){
+  const box=$("#batch-addr-preview");
+  if(!box||!state.batch)return;
+  const fields=editorFields("point");
+  const values=readEditorValues(fields);
+  const plan=buildBatchPlan(values);
+  const count=plan.items.length;
+  if(!count){
+    box.className="batch-preview";
+    box.textContent="按住 Ctrl / Shift 多选源点后，自动按步长顺延目标地址并实时校验冲突";
+    return;
+  }
+  const first=plan.startAddr;
+  const last=first+(count-1)*plan.step;
+  const addrText=plan.protocol==="iec104"?`IOA ${first} → ${last}`:`${plan.area} ${first} → ${last}`;
+  if(plan.conflicts.length){
+    box.className="batch-preview is-conflict";
+    box.textContent=`发现 ${plan.conflicts.length} 处地址冲突：${plan.conflicts.slice(0,3).join("；")}${plan.conflicts.length>3?"…":""}`;
+  }else{
+    box.className="batch-preview is-ok";
+    box.textContent=`就绪 · 共 ${count} 点 · 连续编址 ${addrText}（步长 ${plan.step}，无地址冲突）`;
+  }
+}
 async function openEditor(type,item,batch=false){
-  state.edit={type,item,channel:item ? id(item) : state.selected};state.batch=Boolean(batch);state.sourceCatalog=null;
+  state.edit={type,item,channel:item ? id(item) : state.selected};state.batch=Boolean(batch);state.sourceCatalog=null;state.batchExisting=[];
     const protocol=String(item?.protocol||selected()?.protocol||defaults.protocol).toLowerCase();
     const pointKind = item?.kind || activePointKind();
   const fields=type==="channel"?[...channelCommonFields,...channelProtocolFields.iec104,...channelProtocolFields["modbus-tcp"]]:[...pointCommonFields,...pointProtocolFields.iec104,...pointProtocolFields["modbus-tcp"]];
   $("#editor-title").textContent=batch?"批量新增点映射":`${item?"编辑":"新建"}${type==="channel"?"转发通道":"点映射"}`;
   $("#editor-error").textContent="";
-  $("#editor-fields").innerHTML=fields.map(([k,l,t])=>{
+  const batchBar=batch&&type==="point"?`<div class="batch-addr-bar" id="batch-addr-bar">
+    <label>起始转发点号<input id="batch-start-pnt" type="number" min="1" step="1" placeholder="自动顺延"></label>
+    <label>地址步长<select id="batch-addr-step"><option value="1">1 (连续)</option><option value="2">2 (32位)</option><option value="4">4 (64位)</option><option value="0">0 (不递增)</option></select></label>
+    <label class="batch-check"><input id="batch-auto-name" type="checkbox" checked>沿用源点名称</label>
+    <button type="button" id="batch-auto-fill">一键连续编址</button>
+    <div id="batch-addr-preview" class="batch-preview">正在读取已有映射…</div>
+  </div>`:"";
+  $("#editor-fields").innerHTML=batchBar+fields.map(([k,l,t])=>{
     const group=type==="channel"?(channelProtocolFields.iec104.some(x=>x[0]===k)?"iec104":channelProtocolFields["modbus-tcp"].some(x=>x[0]===k)?"modbus-tcp":""):(pointProtocolFields.iec104.some(x=>x[0]===k)?"iec104":pointProtocolFields["modbus-tcp"].some(x=>x[0]===k)?"modbus-tcp":"");
     const hidden=batch&&type==="point"&&k==="pnt_no";
     const value = k === "kind" && type === "point" ? pointKind : (item?.[k] ?? defaults[k] ?? "");
@@ -281,7 +425,28 @@ async function openEditor(type,item,batch=false){
     loadSourceCatalog().catch(err=>$("#editor-error").textContent=err.message);
   });
   setEditorProtocolVisibility();
-  if(type==="point")try{await loadSourceCatalog()}catch(err){$("#editor-error").textContent=err.message}
+  if(batch&&type==="point"){
+    const stepEl=$("#batch-addr-step");
+    if(stepEl)stepEl.value=String(defaultBatchStep());
+    $("#batch-auto-fill")?.addEventListener("click",applyNextFreeBatchAddress);
+    const fieldsEl=$("#editor-fields");
+    if(fieldsEl){
+      fieldsEl.oninput=()=>{if(state.batch)updateBatchPreview()};
+      fieldsEl.onchange=e=>{
+        if(!state.batch)return;
+        if(e.target?.name==="data_type"||e.target?.name==="register_area"){
+          const s=$("#batch-addr-step");
+          if(s)s.value=String(defaultBatchStep());
+        }
+        updateBatchPreview();
+      };
+    }
+    loadBatchExisting();
+  }else{
+    const fieldsEl=$("#editor-fields");
+    if(fieldsEl){fieldsEl.oninput=null;fieldsEl.onchange=null;}
+  }
+  if(type==="point")try{await loadSourceCatalog();if(batch)updateBatchPreview()}catch(err){$("#editor-error").textContent=err.message}
 }
 function readEditorValues(fields){const values={};for(const [k,,t]of fields){const el=$("#editor-fields [name=\""+k+"\"]");if(!el||el.disabled||el.value===""||el.closest("label")?.hidden)continue;values[k]=["source_rtu_id","source_pnt_no","pnt_no"].includes(k)?el.value:["number","float","bool","addr_base","iec_type"].includes(t)?Number(el.value):el.value}return values}
 async function saveEditor(e){
@@ -295,11 +460,11 @@ async function saveEditor(e){
       if(!channel||channel!==state.selected)throw Error("通道已切换，请重新选择测点");
       if($("#editor-fields [name=\"source_rtu_id\"]")?.disabled||$("#editor-fields [name=\"source_pnt_no\"]")?.disabled)throw Error("请等待源点加载完成后再保存");
       if(state.batch){
-        const pointSelect=$("#editor-fields [name=\"source_pnt_no\"]"), rtu=values.source_rtu_id;
-        const selectedPoints=Array.from(pointSelect?.selectedOptions||[]).map(option=>option.value).filter(Boolean);
-        if(!rtu||!selectedPoints.length)throw Error("请选择源 RTU 和至少一个源点");
-        const items=selectedPoints.map(source_pnt_no=>{const item={...values,source_rtu_id:rtu,source_pnt_no};delete item.pnt_no;return item});
-        await send(`/api/trans/channels/${channel}/points/batch`,"POST",{items});
+        const rtu=values.source_rtu_id;
+        const plan=buildBatchPlan(values);
+        if(!rtu||!plan.items.length)throw Error("请选择源 RTU 和至少一个源点");
+        if(plan.conflicts.length)throw Error(`目标地址冲突，请点击“一键连续编址”或调整起始地址：${plan.conflicts.slice(0,3).join("；")}`);
+        await send(`/api/trans/channels/${channel}/points/batch`,"POST",{items:plan.items});
       }else if(item)await send(`/api/trans/channels/${channel}/points/${encodeURIComponent(item.kind)}/${pno(item)}`,"PATCH",values,item._version);else await send(`/api/trans/channels/${channel}/points`,"POST",values);
       await loadPoints();
     }
@@ -307,7 +472,7 @@ async function saveEditor(e){
   }catch(err){$("#editor-error").textContent=err.message}
 }
 document.addEventListener("click",async e=>{const b=e.target.closest("button");if(!b)return;try{if(b.dataset.pointTab){state.pointOffset=0;state.pointScope="";previousRows=null;setPointTab(b.dataset.pointTab);await loadPoints({fresh:true});return}if(b.dataset.page)return setPage(b.dataset.page);if(b.dataset.control){if(b.dataset.control==="stop"&&typeof window.scadaConfirm==="function"&&!(await window.scadaConfirm(`确认停止转发通道 ${b.dataset.id}？`,{title:"确认停止",confirmText:"确认停止",danger:true})))return;return await control(b.dataset.id,b.dataset.control)}if(b.dataset.edit){state.selected=b.dataset.edit;renderChannels();return openEditor("channel",selected())}if(b.dataset.delete){if(await window.scadaConfirm(`删除转发通道 ${b.dataset.delete} 及全部点映射？`,{title:"确认删除",confirmText:"确认删除",danger:true})){await api(`/api/trans/channels/${b.dataset.delete}`,{method:"DELETE",headers:versionHeaders(b.dataset.version)});state.selected=null;await loadChannels({loadSelectedPoints:true,fresh:true})}return}if(b.dataset.pointEdit)return openEditor("point",state.points.find(x=>String(pno(x))===b.dataset.pointEdit&&x.kind===b.dataset.pointKind));if(b.dataset.pointDelete){if(b.dataset.owner!==state.selected)return;if(await window.scadaConfirm(`删除点映射 ${b.dataset.pointDelete}？`,{title:"确认删除",confirmText:"确认删除",danger:true})){await api(`/api/trans/channels/${b.dataset.owner}/points/${encodeURIComponent(b.dataset.pointKind)}/${b.dataset.pointDelete}`,{method:"DELETE",headers:versionHeaders(b.dataset.version)});await loadPoints()}return}if(b.dataset.log){state.log=b.dataset.log;return loadLog()}if(b.dataset.logChannel){$("#log-channel").value=b.dataset.logChannel;state.log=null;return setPage("logs")}}catch(err){toast(err.message)}});
-$("#channels")?.addEventListener("click",async e=>{if(e.target.closest("button"))return;const r=e.target.closest("tr[data-select]");if(r){state.selected=r.dataset.select;state.pointOffset=0;renderChannels();await loadPoints()}});$("#selected-channel")?.addEventListener("change",async e=>{state.selected=e.target.value||null;state.pointOffset=0;const url=new URL(location.href);if(state.selected)url.searchParams.set("channel_id",state.selected);else url.searchParams.delete("channel_id");history.replaceState(null,"",url);renderChannels();await loadPoints()});$("#kind-filter")?.addEventListener("change",()=>{state.pointOffset=0;state.pointScope="";previousRows=null;setPointTab(activePointKind());loadPoints().catch(e=>toast(e.message))});$("#point-limit")?.addEventListener("change",e=>{state.pointLimit=Number(e.target.value);state.pointOffset=0;loadPoints().catch(e=>toast(e.message))});$("#point-prev")?.addEventListener("click",()=>{state.pointOffset=Math.max(0,state.pointOffset-state.pointLimit);loadPoints().catch(e=>toast(e.message))});$("#point-next")?.addEventListener("click",()=>{state.pointOffset+=state.pointLimit;loadPoints().catch(e=>toast(e.message))});$("#log-channel")?.addEventListener("change",()=>{state.log=null;loadLogs().catch(e=>toast(e.message))});$("#log-keyword")?.addEventListener("input",()=>loadLog().catch(e=>toast(e.message)));if($("#new-channel"))$("#new-channel").onclick=()=>openEditor("channel");if($("#edit-channel"))$("#edit-channel").onclick=()=>selected()?openEditor("channel",selected()):toast("请选择通道");if($("#new-point"))$("#new-point").onclick=()=>state.selected?openEditor("point"):toast("请选择通道");if($("#batch-point"))$("#batch-point").onclick=()=>state.selected?openEditor("point",null,true):toast("请选择通道");if($("#refresh"))$("#refresh").onclick=()=>loadChannels({loadSelectedPoints:true}).catch(e=>toast(e.message));if($("#refresh-processes"))$("#refresh-processes").onclick=()=>loadProcesses().catch(e=>toast(e.message));if($("#refresh-logs"))$("#refresh-logs").onclick=()=>loadLogs().catch(e=>toast(e.message));if($("#reload-log"))$("#reload-log").onclick=()=>loadLog().catch(e=>toast(e.message));if($("#close-editor"))$("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();if($("#editor-form"))$("#editor-form").addEventListener("submit",saveEditor);
+$("#channels")?.addEventListener("click",async e=>{if(e.target.closest("button"))return;const r=e.target.closest("tr[data-select]");if(r){state.selected=r.dataset.select;state.pointOffset=0;renderChannels();await loadPoints()}});$("#selected-channel")?.addEventListener("change",async e=>{state.selected=e.target.value||null;state.pointOffset=0;const url=new URL(location.href);if(state.selected)url.searchParams.set("channel_id",state.selected);else url.searchParams.delete("channel_id");history.replaceState(null,"",url);if(window.scadaFocusContext?.set)window.scadaFocusContext.set({channel_id:state.selected});renderChannels();await loadPoints()});$("#kind-filter")?.addEventListener("change",()=>{state.pointOffset=0;state.pointScope="";previousRows=null;setPointTab(activePointKind());loadPoints().catch(e=>toast(e.message))});$("#point-limit")?.addEventListener("change",e=>{state.pointLimit=Number(e.target.value);state.pointOffset=0;loadPoints().catch(e=>toast(e.message))});$("#point-prev")?.addEventListener("click",()=>{state.pointOffset=Math.max(0,state.pointOffset-state.pointLimit);loadPoints().catch(e=>toast(e.message))});$("#point-next")?.addEventListener("click",()=>{state.pointOffset+=state.pointLimit;loadPoints().catch(e=>toast(e.message))});$("#log-channel")?.addEventListener("change",()=>{state.log=null;loadLogs().catch(e=>toast(e.message))});$("#log-keyword")?.addEventListener("input",()=>loadLog().catch(e=>toast(e.message)));if($("#new-channel"))$("#new-channel").onclick=()=>openEditor("channel");if($("#edit-channel"))$("#edit-channel").onclick=()=>selected()?openEditor("channel",selected()):toast("请选择通道");if($("#new-point"))$("#new-point").onclick=()=>state.selected?openEditor("point"):toast("请选择通道");if($("#batch-point"))$("#batch-point").onclick=()=>state.selected?openEditor("point",null,true):toast("请选择通道");if($("#refresh"))$("#refresh").onclick=()=>loadChannels({loadSelectedPoints:true}).catch(e=>toast(e.message));if($("#refresh-processes"))$("#refresh-processes").onclick=()=>loadProcesses().catch(e=>toast(e.message));if($("#refresh-logs"))$("#refresh-logs").onclick=()=>loadLogs().catch(e=>toast(e.message));if($("#reload-log"))$("#reload-log").onclick=()=>loadLog().catch(e=>toast(e.message));if($("#close-editor"))$("#close-editor").onclick=$("#cancel-editor").onclick=()=>$("#editor").close();if($("#editor-form"))$("#editor-form").addEventListener("submit",saveEditor);
 setPointTab(activePointKind());
 let pointSearchTimer;
 $("#point-search")?.addEventListener("input",()=>{

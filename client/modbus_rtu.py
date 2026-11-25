@@ -72,6 +72,19 @@ class _ModbusRtuTransport(_ModbusOperations):
                     last_error = ModbusError(f'{name} 失败: {exc}')
                     self._business('Modbus通信尝试失败', 操作=name, 站号=unit_id, 地址0基=address,
                                    尝试=attempt+1, 错误=str(last_error))
+                    if isinstance(exc, OSError):
+                        # 串口热插拔/驱动瞬断时主动关闭并尝试重开句柄自愈。
+                        try:
+                            self.native.close()
+                        except OSError:
+                            pass
+                        if attempt < attempts - 1:
+                            try:
+                                if not self.native.connect():
+                                    break
+                            except OSError:
+                                break
+                        continue
                     # 清理串口 RX 残留脏字节，防止下轮重试读到上一帧迟到/串站响应。
                     sock = getattr(self.native, 'socket', None)
                     if sock is not None and hasattr(sock, 'reset_input_buffer'):

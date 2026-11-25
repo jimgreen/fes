@@ -188,8 +188,20 @@ function lockProtocolConfiguration(form) {
   }
   function renderLogs(items, target) { $(target).innerHTML = items.slice().reverse().map(x => `<div class="${esc(x.level)}">[${esc(x.time)}] ${esc(x.message)}</div>`).join("") || "暂无记录"; }
   function pointsVisible() {
-    const el = $("#points-body");
-    return Boolean(el && el.offsetParent !== null);
+    const panel = document.querySelector('[data-tab-panel="points"]');
+    if (panel) return !panel.hidden && panel.offsetParent !== null;
+    const body = pointsBody();
+    return Boolean(body && body.offsetParent !== null);
+  }
+  let actionBusy = false;
+  async function runAction(btn, fn) {
+    if (actionBusy) return;
+    actionBusy = true;
+    if (btn) btn.disabled = true;
+    try { await fn(); } finally {
+      actionBusy = false;
+      if (btn) btn.disabled = false;
+    }
   }
   function load(background = false) {
     return form.refresh(() => {
@@ -217,18 +229,19 @@ function lockProtocolConfiguration(form) {
     }, e => message(e.message, true), background === true);
   }
   $("#config-form").onsubmit = async (e) => { e.preventDefault(); if (configForm.dataset.configurationReadonly) { message("配置请到“数据与定义 → 通道数据”修改"); return; } const body = {}; cfg.fields.forEach(name => { const node = $("[data-field='" + name + "']"); if (!node) return; body[name] = fieldValue(name, node); }); try { await form.save(() => api(`/api/${cfg.slug}/config`, {method:"PATCH", body:JSON.stringify(body)})); await load(false); message("配置已保存"); } catch (err) { message(err.message, true); } };
-  $("#start").onclick = async () => { try { await api(`/api/${cfg.slug}/start`, {method:"POST", body:"{}"}); await load(false); message("服务已启动"); } catch(e) { message(e.message, true); } };
-  $("#stop").onclick = async () => {
+  $("#start").onclick = () => runAction($("#start"), async () => { try { await api(`/api/${cfg.slug}/start`, {method:"POST", body:"{}"}); await load(false); message("服务已启动"); } catch(e) { message(e.message, true); } });
+  $("#stop").onclick = () => runAction($("#stop"), async () => {
     if (typeof window.scadaConfirm === "function" && !(await window.scadaConfirm("确认停止当前服务？", { title: "确认停止", confirmText: "确认停止", danger: true }))) return;
     try { await api(`/api/${cfg.slug}/stop`, {method:"POST", body:"{}"}); await load(false); message("服务已停止"); } catch(e) { message(e.message, true); }
-  };
-  $("#refresh").onclick = load;
-  $("#poll").onclick = async () => { try { const result = await api(`/api/${cfg.slug}/poll`, {method:"POST", body:"{}"}); await load(false); message("采集完成 " + (result.item.count ?? 0) + " 个值"); } catch (e) { message(e.message, true); } };
+  });
+  $("#refresh").onclick = () => load(false);
+  $("#poll").onclick = () => runAction($("#poll"), async () => { try { const result = await api(`/api/${cfg.slug}/poll`, {method:"POST", body:"{}"}); await load(false); message("采集完成 " + (result.item.count ?? 0) + " 个值"); } catch (e) { message(e.message, true); } });
   // Use one delegated handler for all four-remote tables.  The fallback keeps
   // the handler compatible with compact DOMs that expose only the YC body.
   function askPointValue(kind, point, command) {
     const isBinary = kind === "yx" || kind === "yk";
     if (typeof document.createElement !== "function" || !document.body) {
+      message("当前环境不支持弹窗输入", true);
       return Promise.resolve(null);
     }
     let dialog = document.getElementById("protocol-value-dialog");
@@ -239,6 +252,7 @@ function lockProtocolConfiguration(form) {
       document.body.append(dialog);
     }
     if (typeof dialog.showModal !== "function") {
+      message("当前浏览器不支持模态弹窗输入", true);
       return Promise.resolve(null);
     }
     const title = `${command ? "下发" : "更新"} ${kind.toUpperCase()} 点 ${point}`;
@@ -267,7 +281,7 @@ function lockProtocolConfiguration(form) {
   const pointRoot = document.querySelector("[data-point-panels]") || $("#points");
   if (pointRoot) pointRoot.onclick = async (e) => {
     const b = e.target.closest("button");
-    if (!b) return;
+    if (!b || b.disabled) return;
     const kind = b.dataset.update, point = b.dataset.point;
     try {
       if (b.dataset.update) {
@@ -280,17 +294,27 @@ function lockProtocolConfiguration(form) {
         const value = kind === "yx" || kind === "yk" ? numeric === 1 : numeric;
         const path = command ? `/api/${cfg.slug}/commands/${kind}/${point}` : `/api/${cfg.slug}/update/incremental`;
         const body = command ? {value} : {kind, pnt_no:keyValue(point), value};
-        await api(path, {method:"POST", body:JSON.stringify(body)});
-        await load();
-        message(command ? "指令已发送" : "点值已更新");
+        b.disabled = true;
+        try {
+          await api(path, {method:"POST", body:JSON.stringify(body)});
+          await load();
+          message(command ? "指令已发送" : "点值已更新");
+          if (command && typeof window.scadaTrackCommand === "function") {
+            const rtuId = $("#rtu-id")?.value || new URLSearchParams(location.search).get("rtu_id");
+            if (rtuId) window.scadaTrackCommand({ rtu_id: rtuId, kind, pnt_no: point, value });
+          }
+        } finally {
+          b.disabled = false;
+        }
       }
     } catch(err) { message(err.message, true); }
   };
   document.addEventListener("scada:point-tab", event => {
     activePointKind = event.detail.kind;
     renderActivePoints();
+    load(true);
   });
   if ($("#add-point")) $("#add-point").onsubmit = () => false;
   $("#frame-form")?.addEventListener("submit", async e => { e.preventDefault(); try { const body = {arbitration_id:Number($("#frame-id").value), data:$("#frame-data").value, is_extended_id:Number($("#frame-ext").value)}; await api(`/api/${cfg.slug}/frame`, {method:"POST", body:JSON.stringify(body)}); message("CAN 帧已发送"); await load(); } catch(err) { message(err.message, true); } });
-  load(); setInterval(() => { if (!document.hidden) load(true); }, 5000);
+  load(); setInterval(() => { if (!document.hidden && !document.querySelector?.("dialog[open]")) load(true); }, 5000);
 })();
