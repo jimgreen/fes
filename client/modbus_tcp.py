@@ -460,9 +460,10 @@ class _ModbusMasterOperations:
             "response_timeout,retry_count",
     }
 
-    def _init_master(self, calls, points, definitions):
+    def _init_master(self, calls, points, definitions, *, coalesce_reads=False):
         if self.rtu_id is not None:
             integer(self.rtu_id, 'rtu_id', 1, 2**63 - 1)
+        self.coalesce_reads = bool(coalesce_reads)
         self._calls = []
         self._points = []
         self._definitions = []
@@ -549,6 +550,7 @@ class _ModbusMasterOperations:
         definitions = tables['fes_channel_modbus_define_ytyk']
         if not calls and points:
             raise ValueError(f'RTU {rtu_id} 有数据点但没有召唤定义')
+        kwargs.setdefault('coalesce_reads', True)
         if unit_id is None:
             return cls.from_channel(
                 channel, rtu_id=rtu_id, calls=calls, points=points,
@@ -649,9 +651,53 @@ class _ModbusMasterOperations:
         ids = {field(row, 'rtu_id') for row in [*calls, *points]}
         if len(ids) > 1:
             raise ValueError('一个主站只采集一个 RTU；请指定 rtu_id 过滤点表')
-        return tuple((rtu_id, seq, address, count, fc, unit, tuple(matched))
-                     for seq, (rtu_id, address, _address_base, count, fc, unit, matched)
-                     in sorted(call_by_seq.items()))
+        raw_plan = tuple(
+            (rtu_id, seq, address, count, fc, unit, tuple(matched))
+            for seq, (rtu_id, address, _address_base, count, fc, unit, matched)
+            in sorted(call_by_seq.items())
+        )
+        if getattr(self, 'coalesce_reads', False):
+            return self._coalesce_poll_plan(raw_plan)
+        return tuple(
+            (rtu_id, (seq,), address, count, fc, unit,
+             tuple((seq, number, offset, kind, decoder) for number, offset, kind, decoder in matched))
+            for rtu_id, seq, address, count, fc, unit, matched in raw_plan
+        )
+
+    @staticmethod
+    def _coalesce_poll_plan(raw_plan):
+        """合并同站号、同功能码且地址紧密连续/重叠的召唤段（不超过单帧协议上限），保留每点原 call_seq。"""
+        merged = []
+        for rtu_id, seq, address, count, fc, unit, matched in raw_plan:
+            limit = 2000 if fc < 3 else 125
+            stride = 2 if fc >= 3 else 1
+            tagged = [(seq, number, offset, kind, decoder) for number, offset, kind, decoder in matched]
+            if merged:
+                prev_rtu, prev_seqs, prev_addr, prev_count, prev_fc, prev_unit, prev_items = merged[-1]
+                prev_end = prev_addr + prev_count
+                cur_end = address + count
+                if (
+                    prev_rtu == rtu_id
+                    and prev_fc == fc
+                    and prev_unit == unit
+                    and address >= prev_addr
+                    and address <= prev_end
+                    and max(prev_end, cur_end) - prev_addr <= limit
+                ):
+                    delta = (address - prev_addr) * stride
+                    shifted = [(s, n, off + delta, k, dec) for s, n, off, k, dec in tagged]
+                    merged[-1] = (
+                        prev_rtu,
+                        prev_seqs + (seq,),
+                        prev_addr,
+                        max(prev_end, cur_end) - prev_addr,
+                        prev_fc,
+                        prev_unit,
+                        prev_items + tuple(shifted),
+                    )
+                    continue
+            merged.append((rtu_id, (seq,), address, count, fc, unit, tuple(tagged)))
+        return tuple(merged)
 
     def _execute_poll_plan(self, plan):
         result = []
@@ -663,14 +709,15 @@ class _ModbusMasterOperations:
         invoke = self._invoke
         read_methods = _READ_METHODS
         default_unit = self.unit_id
-        for rtu_id, seq, address, count, fc, unit, matched in plan:
+        for rtu_id, seqs, address, count, fc, unit, matched in plan:
             values = invoke(read_methods[fc], address, count,
                             default_unit if unit is None else unit)
             if len(values) < count:
-                raise ModbusError(f'召唤 {seq} 响应数量错误：至少需要 {count}，得到 {len(values)}')
+                seq_label = seqs[0] if len(seqs) == 1 else "/".join(str(s) for s in seqs)
+                raise ModbusError(f'召唤 {seq_label} 响应数量错误：至少需要 {count}，得到 {len(values)}')
             raw = _register_packer(count)(*values[:count]) if fc >= 3 else b''
             now = datetime.now(timezone.utc)
-            for number, offset, kind, decoder in matched:
+            for seq, number, offset, kind, decoder in matched:
                 value = (decoder(raw, offset) if fc >= 3 else bool(values[offset]) ^ decoder)
                 result.append(ModbusValue(rtu_id, seq, number, kind,
                                           bool(value) if kind == 'yx' else value, now))
@@ -761,11 +808,11 @@ class ModbusTcpMaster(_ModbusMasterOperations, _ModbusTcpTransport):
 
     def __init__(self, host, port=502, *, unit_id=1, timeout=3.0,
                  connect_timeout=None, rtu_id=None, retry_count=0, keep_alive=True,
-                 calls=None, points=None, definitions=None):
+                 calls=None, points=None, definitions=None, coalesce_reads=False):
         super().__init__(host, port, unit_id=unit_id, timeout=timeout,
                          connect_timeout=connect_timeout, rtu_id=rtu_id,
                          retry_count=retry_count, keep_alive=keep_alive)
-        self._init_master(calls, points, definitions)
+        self._init_master(calls, points, definitions, coalesce_reads=coalesce_reads)
 
     @classmethod
     def from_channel(cls, channel, **kwargs):

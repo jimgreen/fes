@@ -419,9 +419,8 @@ class _OpcUaProtocol(PacketTrace):
             for item in data:
                 if item.StatusCode is None:
                     raise OpcError("OPC UA 读取未返回状态码")
-                # 单点坏品质（如 BadSensorFailure）通过 StatusCode 透传给上层质量位，避免整批健康测点被连带丢弃。
-                val = item.Value.Value if getattr(item, "Value", None) is not None else None
-                results.append((val, item.StatusCode, received))
+                item.StatusCode.check()
+                results.append((item.Value.Value, item.StatusCode, received))
             offset += len(chunk)
         return results
 

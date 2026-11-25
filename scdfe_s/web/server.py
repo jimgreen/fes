@@ -616,6 +616,8 @@ class ScadaHandler(BaseScadaHandlerMixin, RequestBodyMixin, BaseHTTPRequestHandl
         self._prepare_request()
         parts, query = self._path()
         method = "GET" if self.command == "HEAD" else self.command
+        from core.web_security import enforce_web_access
+        enforce_web_access(self, parts, method)
         if handle_database(self, parts, query, method) is not False:
             return
         from core.web_soe import handle_soe

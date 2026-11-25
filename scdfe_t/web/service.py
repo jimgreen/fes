@@ -8,6 +8,8 @@ and runtime state share the same database and optimistic-version rules.
 from __future__ import annotations
 
 from contextlib import contextmanager
+import csv
+import io
 from itertools import groupby
 from pathlib import Path
 import sqlite3
@@ -422,6 +424,228 @@ class TransStore:
                 audit.emit('数据库已提交', table=POINT_TABLE, channel_id=cid,
                            operation='批量新增映射', count=len(rows), before=None, after=rows)
         return rows
+
+    @staticmethod
+    def _modbus_word_width(dtype: str | None) -> int:
+        t = str(dtype or "").lower()
+        if t in ("float64", "int64", "uint64"):
+            return 4
+        if t in ("float32", "int32", "uint32"):
+            return 2
+        return 1
+
+    def export_points_csv(self, channel_id: Any, *, kind: str | None = None) -> bytes:
+        """导出转发通道点映射为 UTF-8 BOM CSV，同时可作批量导入模板。"""
+        channel = self.get_channel(channel_id)
+        protocol = str(channel.get("protocol") or "iec104").lower()
+        rows = self.points(channel_id)
+        if kind:
+            k = str(kind).lower()
+            if k not in KIND_TABLES:
+                raise ApiError(400, "点映射 kind 必须是 yc、yx、yk 或 yt")
+            rows = [r for r in rows if r.get("kind") == k]
+        common_cols = ["kind", "pnt_no", "name", "source_rtu_id", "source_pnt_no", "enabled"]
+        proto_cols = (
+            ["io_address", "type_id", "time_tag", "command_mode"]
+            if protocol == "iec104"
+            else ["register_area", "address", "address_base", "data_type", "byte_order", "word_order", "scale", "offset"]
+        )
+        cols = common_cols + proto_cols
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(cols)
+        for row in rows:
+            out = []
+            for c in cols:
+                v = row.get(c)
+                txt = "" if v is None else str(v)
+                if txt and txt[0] in ("=", "+", "-", "@", "\t", "\r"):
+                    txt = "'" + txt
+                out.append(txt)
+            writer.writerow(out)
+        return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+    def import_points_csv(self, channel_id: Any, body: dict[str, Any]) -> dict[str, Any]:
+        """解析并预检/导入 CSV 转发点表，支持 dry_run 冲突与源点预检。"""
+        if not isinstance(body, dict):
+            raise ApiError(400, "请求体必须是对象")
+        csv_text = body.get("csv_text")
+        if not isinstance(csv_text, str) or not csv_text.strip():
+            raise ApiError(400, "请提供非空的 csv_text 内容")
+        dry_run = bool(body.get("dry_run", True))
+        channel = self.get_channel(channel_id)
+        cid = int(channel["channel_id"])
+        protocol = str(channel.get("protocol") or "iec104").lower()
+        existing = self.points(cid)
+
+        cleaned = csv_text.lstrip("\ufeff")
+        reader = csv.DictReader(io.StringIO(cleaned))
+        if not reader.fieldnames:
+            raise ApiError(400, "CSV 缺少表头")
+
+        alias = {
+            "类型": "kind", "转发类型": "kind",
+            "转发点号": "pnt_no", "点号": "pnt_no",
+            "名称": "name",
+            "源rtu": "source_rtu_id", "源 rtu": "source_rtu_id",
+            "源点号": "source_pnt_no",
+            "启用": "enabled",
+            "iec ioa": "io_address", "ioa": "io_address",
+            "iec类型号": "type_id", "时间标签": "time_tag", "命令方式": "command_mode",
+            "modbus数据区": "register_area", "数据区": "register_area",
+            "modbus地址": "address", "地址": "address", "地址基准": "address_base",
+            "数据类型": "data_type", "字节序": "byte_order", "字序": "word_order",
+            "比例": "scale", "偏移": "offset",
+        }
+        int_fields = {"pnt_no", "source_rtu_id", "source_pnt_no", "enabled", "io_address", "type_id", "address", "address_base"}
+        float_fields = {"scale", "offset"}
+        valid_cols = set(self._columns(POINT_TABLE)) - POINT_RUNTIME_FIELDS - {"channel_id"}
+
+        existing_pks = {(r["kind"], int(r["pnt_no"])) for r in existing}
+        existing_addr: dict[str, int] = {}
+        for r in existing:
+            if protocol == "iec104":
+                if r.get("io_address") is not None:
+                    existing_addr[f"ioa:{r['io_address']}"] = int(r["pnt_no"])
+            else:
+                area = str(r.get("register_area") or "holding").lower()
+                width = 1 if area in ("coil", "discrete") else self._modbus_word_width(r.get("data_type"))
+                base = r.get("address")
+                if base is not None:
+                    for w in range(width):
+                        existing_addr[f"{area}:{int(base) + w}"] = int(r["pnt_no"])
+
+        # 加载现有源点集合用于缺失预警
+        source_points: dict[str, set[tuple[int, int]]] = {}
+        with self.store.connection() as con:
+            for k, tbl in KIND_TABLES.items():
+                source_points[k] = {
+                    (int(r[0]), int(r[1]))
+                    for r in con.execute(f"SELECT rtu_id, pnt_no FROM {tbl}")
+                }
+
+        prepared: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        conflicts: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
+        batch_pks: set[tuple[str, int]] = set()
+        batch_addr: dict[str, int] = {}
+        total_rows = 0
+
+        for line_no, raw_row in enumerate(reader, start=2):
+            if not raw_row or not any(str(v or "").strip() for v in raw_row.values()):
+                continue
+            total_rows += 1
+            if total_rows > 500:
+                errors.append({"line": line_no, "message": "单次 CSV 导入最多支持 500 行"})
+                break
+            item: dict[str, Any] = {}
+            parse_err = None
+            for raw_k, raw_v in raw_row.items():
+                if raw_k is None:
+                    continue
+                k_norm = raw_k.strip().lower()
+                col = alias.get(k_norm, k_norm)
+                if col not in valid_cols:
+                    continue
+                val_s = str(raw_v or "").strip()
+                if val_s == "":
+                    continue
+                if col == "kind":
+                    item[col] = val_s.lower()
+                elif col == "enabled" and val_s in ("是", "否", "true", "false", "True", "False"):
+                    item[col] = 1 if val_s in ("是", "true", "True") else 0
+                elif col in int_fields:
+                    try:
+                        item[col] = int(val_s)
+                    except ValueError:
+                        parse_err = f"字段 {col} 需要整数，得到 {val_s!r}"
+                        break
+                elif col in float_fields:
+                    try:
+                        item[col] = float(val_s)
+                    except ValueError:
+                        parse_err = f"字段 {col} 需要数值，得到 {val_s!r}"
+                        break
+                else:
+                    item[col] = val_s
+            if parse_err:
+                errors.append({"line": line_no, "message": parse_err})
+                continue
+            try:
+                _, checked = self._point_values(cid, item, allow_missing_pnt_no=True, check_channel=False)
+            except ApiError as exc:
+                errors.append({"line": line_no, "message": exc.message})
+                continue
+
+            kind = checked["kind"]
+            if checked.get("pnt_no") is not None:
+                pk = (kind, int(checked["pnt_no"]))
+                if pk in existing_pks:
+                    conflicts.append({"line": line_no, "message": f"转发点 ({kind}, #{pk[1]}) 已存在"})
+                elif pk in batch_pks:
+                    conflicts.append({"line": line_no, "message": f"CSV 批次内重复转发点 ({kind}, #{pk[1]})"})
+                batch_pks.add(pk)
+
+            if protocol == "iec104":
+                ioa = checked.get("io_address")
+                if ioa is not None:
+                    ak = f"ioa:{ioa}"
+                    if ak in existing_addr:
+                        conflicts.append({"line": line_no, "message": f"IOA {ioa} 已被既有转发点 #{existing_addr[ak]} 占用"})
+                    elif ak in batch_addr:
+                        conflicts.append({"line": line_no, "message": f"IOA {ioa} 与第 {batch_addr[ak]} 行重复"})
+                    else:
+                        batch_addr[ak] = line_no
+            else:
+                area = str(checked.get("register_area") or "holding").lower()
+                addr = checked.get("address")
+                if addr is not None:
+                    width = 1 if area in ("coil", "discrete") else self._modbus_word_width(checked.get("data_type"))
+                    for w in range(width):
+                        ak = f"{area}:{int(addr) + w}"
+                        if ak in existing_addr:
+                            conflicts.append({"line": line_no, "message": f"{area} 地址 {int(addr) + w} 已被既有转发点 #{existing_addr[ak]} 占用"})
+                            break
+                        if ak in batch_addr:
+                            conflicts.append({"line": line_no, "message": f"{area} 地址 {int(addr) + w} 与第 {batch_addr[ak]} 行重叠"})
+                            break
+                        batch_addr[ak] = line_no
+
+            src_key = (int(checked["source_rtu_id"]), int(checked["source_pnt_no"]))
+            if src_key not in source_points.get(kind, set()):
+                warnings.append({"line": line_no, "message": f"源点 {kind.upper()} RTU {src_key[0]} #{src_key[1]} 尚未在采集库中定义（允许预配置）"})
+            prepared.append(checked)
+
+        summary = {
+            "dry_run": dry_run,
+            "channel_id": cid,
+            "protocol": protocol,
+            "total_rows": total_rows,
+            "valid_count": len(prepared),
+            "error_count": len(errors),
+            "conflict_count": len(conflicts),
+            "warning_count": len(warnings),
+            "errors": errors[:50],
+            "conflicts": conflicts[:50],
+            "warnings": warnings[:50],
+        }
+        if dry_run:
+            summary["preview"] = prepared[:20]
+            return summary
+        if errors or conflicts:
+            raise ApiError(
+                409 if conflicts and not errors else 400,
+                f"CSV 校验未通过：格式错误 {len(errors)} 处、地址/主键冲突 {len(conflicts)} 处",
+                code="conflict" if conflicts and not errors else "bad_request",
+                details=summary,
+            )
+        if not prepared:
+            raise ApiError(400, "CSV 中没有可导入的有效数据行")
+        created = self.create_points_batch(cid, {"items": prepared})
+        summary["imported_count"] = len(created)
+        summary["items"] = created
+        return summary
 
     def get_point(self, channel_id: Any, key: list[Any]) -> dict[str, Any]:
         self.get_channel(channel_id)

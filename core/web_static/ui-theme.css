@@ -2355,6 +2355,74 @@ td.col-num {
   color: var(--accent-contrast) !important;
 }
 
+/* 三端顶栏快捷切换胶囊（C | S | T）与只读/运维解锁芯片 */
+.ui-sibling-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  margin-left: 8px;
+  border-radius: var(--radius-btn);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  flex: 0 0 auto;
+}
+.ui-sibling-link {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  text-decoration: none;
+  color: var(--text-secondary) !important;
+  white-space: nowrap;
+}
+.ui-sibling-link:hover {
+  color: var(--text-primary) !important;
+  background: var(--bg-hover);
+}
+.ui-sibling-link.is-active {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.ui-auth-chip {
+  height: 24px !important;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-subtle) !important;
+  color: var(--text-primary) !important;
+  white-space: nowrap;
+}
+.ui-auth-chip.is-readonly,
+.ui-auth-chip.is-locked {
+  border-color: var(--warn) !important;
+  color: var(--warn) !important;
+}
+.ui-auth-chip.is-unlocked {
+  border-color: var(--ok) !important;
+  color: var(--ok) !important;
+}
+.ui-auth-dialog {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-dialog);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-dialog);
+  padding: 0;
+  min-width: 320px;
+}
+.ui-auth-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+.ui-auth-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border-color); }
+.ui-auth-body { display: flex; flex-direction: column; gap: 8px; padding: 14px; font-size: 12px; }
+.ui-auth-body label { display: flex; flex-direction: column; gap: 4px; }
+.ui-auth-err { margin: 0; color: var(--danger); font-size: 12px; min-height: 16px; }
+.ui-auth-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border-color); }
+
 @media (max-width: 960px) {
   .workbench-topbar,
   .topbar {

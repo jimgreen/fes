@@ -75,6 +75,12 @@ body[data-diagnostics] .diag-panel{flex:1 1 0;min-height:0;display:flex;flex-dir
 .diag-side-scroll{flex:1 1 0;min-height:0;overflow:auto}
 .diag-side-scroll p{margin:0;font-size:12px;color:var(--text-secondary,#637b8c)}
 .diag-side-text{flex:1 1 0;min-height:0;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}
+.diag-mini-btn{height:22px;padding:0 7px;font-size:11px;border-radius:4px}
+.diag-storage-health{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-bottom:4px;font-size:11px}
+.diag-wal-pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-weight:600;border:1px solid var(--border-color)}
+.diag-wal-pill.is-ok{color:var(--ok);border-color:var(--ok)}
+.diag-wal-pill.is-warn{color:var(--warn);border-color:var(--warn)}
+.diag-wal-pill.is-crit{color:var(--danger);border-color:var(--danger)}
 
 .diag-splitter{position:relative;display:flex;align-items:center;justify-content:center;flex:0 0 auto;user-select:none;touch-action:none}
 .diag-splitter-y{height:16px;margin:4px 0;gap:6px;cursor:row-resize}

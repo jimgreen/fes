@@ -47,3 +47,12 @@ tr.selected{background:var(--bg-selected,#e8f6f7)}
 .batch-preview{flex:1 1 100%;font-size:12px;color:var(--text-secondary,#52636b);padding-top:2px}
 .batch-preview.is-ok{color:var(--ok,#087443);font-weight:600}
 .batch-preview.is-conflict{color:var(--danger,#ad2931);font-weight:600}
+dialog.csv-import-dialog{width:min(760px,calc(100vw - 32px));padding:0;overflow:hidden;border:var(--border,1px solid #c9d8dd);background:var(--bg-surface,#fff);color:var(--text-primary,#20333d)}
+dialog.csv-import-dialog .dialog-head{padding:12px 18px;border-bottom:var(--border,1px solid #dce7ea);background:var(--bg-subtle,#f7fafb)}
+dialog.csv-import-dialog .csv-import-body{display:flex;flex-direction:column;gap:8px;padding:14px 18px}
+dialog.csv-import-dialog .csv-import-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+dialog.csv-import-dialog textarea{width:100%;font:12px/1.45 var(--font-mono,ui-monospace,monospace);padding:8px;border:1px solid var(--border-color,#cbd5e1);border-radius:var(--radius-input,6px);background:var(--bg-surface,#fff);color:var(--text-primary,#0f172a)}
+dialog.csv-import-dialog .csv-import-report{white-space:pre-wrap;font-size:12px;padding:8px 10px;border-radius:6px;background:var(--bg-subtle,#f1f5f9);border:1px solid var(--border-color,#e2e8f0);max-height:140px;overflow:auto}
+dialog.csv-import-dialog .csv-import-report.is-ok{color:var(--ok,#087443)}
+dialog.csv-import-dialog .csv-import-report.is-conflict{color:var(--danger,#ad2931)}
+dialog.csv-import-dialog .dialog-actions{padding:10px 18px 14px;border-top:var(--border,1px solid #e0e8eb);background:var(--bg-subtle,#fbfcfd);margin:0}

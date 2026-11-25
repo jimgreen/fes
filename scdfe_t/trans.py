@@ -589,18 +589,26 @@ class TransRuntime:
             return 0.0, int(quality) | 128
         return value, int(quality)
 
+    def _error_backoff_map(self) -> dict[Any, tuple[float, float, str, float]]:
+        table = getattr(self, "_point_error_backoff", None)
+        if table is None:
+            table = {}
+            self._point_error_backoff = table
+        return table
+
     def _should_retry_point(self, key) -> bool:
-        entry = self._point_error_backoff.get(key)
+        entry = self._error_backoff_map().get(key)
         return entry is None or time.monotonic() >= entry[0]
 
     def _mark_point_error(self, key, exc: Any) -> None:
         now_m = time.monotonic()
         msg = str(exc)
-        prev = self._point_error_backoff.get(key)
+        backoff = self._error_backoff_map()
+        prev = backoff.get(key)
         delay = min(30.0, (prev[1] * 2.0) if prev is not None else 1.0)
         last_logged = prev[3] if (prev is not None and prev[2] == msg) else 0.0
         should_log = (now_m - last_logged) >= 30.0
-        self._point_error_backoff[key] = (now_m + delay, delay, msg, now_m if should_log else last_logged)
+        backoff[key] = (now_m + delay, delay, msg, now_m if should_log else last_logged)
         if should_log:
             self._runtime_error(exc)
             self.logger.error(f"转发点 {key[0]}/{key[1]} 更新失败: {msg}")
@@ -917,7 +925,7 @@ class TransRuntime:
                     changes.append((*key, value, quality))
             else:
                 self._source_dirty.discard(key)
-                self._point_error_backoff.pop(key, None)
+                self._error_backoff_map().pop(key, None)
         if changes:
             soe_keys = self._soe_keys
             has_active = self.server.active_connection_count > 0
@@ -947,7 +955,7 @@ class TransRuntime:
                     continue
                 self.values[key], self.qualities[key] = value, quality
                 self._source_dirty.discard(key)
-                self._point_error_backoff.pop(key, None)
+                self._error_backoff_map().pop(key, None)
                 is_soe = key in soe_keys
                 if is_soe:
                     updated_soe += 1
@@ -1007,7 +1015,7 @@ class TransRuntime:
                 else:
                     self.qualities[key] = quality  # Modbus does not transmit quality bits.
                     self._source_dirty.discard(key)
-                    self._point_error_backoff.pop(key, None)
+                    self._error_backoff_map().pop(key, None)
             for key in keys:
                 point = self.points[key]
                 if point.kind not in {"yc", "yx"} or key in current:
@@ -1035,7 +1043,7 @@ class TransRuntime:
                         norm_val, norm_qual = self._normalize_sample(raw_val, raw_qual)
                         self.values[key], self.qualities[key] = norm_val, norm_qual
                         self._source_dirty.discard(key)
-                        self._point_error_backoff.pop(key, None)
+                        self._error_backoff_map().pop(key, None)
                         point = self.points.get(key)
                         prev = prev_samples.get(key)
                         # 将源值变化与 Modbus 寄存器更新合并为单条业务日志，日志量减半且保留完整追溯字段。

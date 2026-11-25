@@ -463,13 +463,15 @@ class ScadaHandler(BaseScadaHandlerMixin, RequestBodyMixin, BaseHTTPRequestHandl
     def _dispatch(self):
         self._prepare_request()
         parts, query = self._path()
+        method = "GET" if self.command == "HEAD" else self.command
+        from core.web_security import enforce_web_access
+        enforce_web_access(self, parts, method)
         if (len(parts) >= 3 and parts[:2] == ["api", "tables"]
                 and parts[2] in TRANS_DEFINITION_TABLES):
             raise ApiError(404, "四遥转发定义仅由 scdfe_t 维护，请使用 scdfe_t Web",
                            code="trans_definition_owned_by_t")
-        if handle_database(self, parts, query, 'GET' if self.command == 'HEAD' else self.command) is not False:
+        if handle_database(self, parts, query, method) is not False:
             return
-        method = "GET" if self.command == "HEAD" else self.command
         from core.web_diagnostics import handle_diagnostics
         from core.web_commands import handle_commands
         if handle_commands(self,parts,query,method,self.store,'c') is not False:

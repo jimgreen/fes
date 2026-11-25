@@ -481,5 +481,63 @@ $("#point-search")?.addEventListener("input",()=>{
   pointSearchTimer=setTimeout(()=>loadPoints().catch(e=>toast(e.message)),250);
 });
 $("#point-live-refresh")?.addEventListener("change",()=>loadPoints().catch(e=>toast(e.message)));
+function triggerCsvExport(){
+  if(!state.selected)return toast("请先选择转发通道");
+  const a=document.createElement("a");
+  a.href=`/api/trans/channels/${encodeURIComponent(state.selected)}/points/export-csv`;
+  a.download=`trans-ch${state.selected}-points.csv`;
+  document.body.appendChild(a);a.click();a.remove();
+}
+$("#csv-export")?.addEventListener("click",triggerCsvExport);
+$("#csv-download-tpl")?.addEventListener("click",triggerCsvExport);
+$("#csv-import-open")?.addEventListener("click",()=>{
+  if(!state.selected)return toast("请先选择转发通道");
+  $("#csv-import-error").textContent="";
+  $("#csv-import-report").className="csv-import-report muted";
+  $("#csv-import-report").textContent="点击“预检校验”可提前检查地址与主键冲突";
+  $("#csv-import-dialog")?.showModal();
+});
+$("#close-csv-import")?.addEventListener("click",()=>$("#csv-import-dialog")?.close());
+$("#cancel-csv-import")?.addEventListener("click",()=>$("#csv-import-dialog")?.close());
+$("#csv-import-file")?.addEventListener("change",async e=>{
+  const file=e.target.files?.[0];
+  if(!file)return;
+  $("#csv-import-text").value=await file.text();
+});
+async function runCsvImport(dryRun){
+  if(!state.selected)return toast("请先选择转发通道");
+  const text=$("#csv-import-text")?.value||"";
+  if(!text.trim()){$("#csv-import-error").textContent="请先选择或粘贴 CSV 内容";return;}
+  $("#csv-import-error").textContent="";
+  const dryBtn=$("#csv-dry-run"), commitBtn=$("#csv-commit");
+  if(dryBtn)dryBtn.disabled=true;
+  if(commitBtn)commitBtn.disabled=true;
+  try{
+    const res=await api(`/api/trans/channels/${encodeURIComponent(state.selected)}/points/import-csv`,{
+      method:"POST",body:JSON.stringify({csv_text:text,dry_run:dryRun})
+    });
+    const box=$("#csv-import-report");
+    if(dryRun){
+      const lines=[];
+      lines.push(`共 ${res.total_rows} 行 · 有效 ${res.valid_count} · 错误 ${res.error_count} · 冲突 ${res.conflict_count} · 源点预警 ${res.warning_count}`);
+      (res.errors||[]).slice(0,5).forEach(x=>lines.push(`[错误 行${x.line}] ${x.message}`));
+      (res.conflicts||[]).slice(0,5).forEach(x=>lines.push(`[冲突 行${x.line}] ${x.message}`));
+      (res.warnings||[]).slice(0,4).forEach(x=>lines.push(`[预警 行${x.line}] ${x.message}`));
+      box.className="csv-import-report "+(res.error_count||res.conflict_count?"is-conflict":"is-ok");
+      box.textContent=lines.join("\n");
+    }else{
+      $("#csv-import-dialog")?.close();
+      toast(`CSV 导入成功：新增 ${res.imported_count||0} 条点映射`);
+      await loadPoints();
+    }
+  }catch(err){
+    $("#csv-import-error").textContent=err.message;
+  }finally{
+    if(dryBtn)dryBtn.disabled=false;
+    if(commitBtn)commitBtn.disabled=false;
+  }
+}
+$("#csv-dry-run")?.addEventListener("click",()=>runCsvImport(true));
+$("#csv-import-form")?.addEventListener("submit",e=>{e.preventDefault();runCsvImport(false)});
 async function boot(){try{await api("/api/health");$("#connection").textContent="Web 已连接";$("#connection").classList.add("ok");await loadChannels({loadSelectedPoints:true,fresh:true})}catch(e){$("#connection").textContent="连接失败";$("#connection").classList.add("bad");toast(e.message)}}boot();setInterval(()=>{if(document.hidden||pendingChannels||$("#editor")?.open)return;if(state.page==="channels"&&!$("#channels"))return;(state.page==="channels"?loadChannels:state.page==="processes"?loadProcesses:loadLogs)().catch(e=>toast(e.message))},5000);
 setInterval(()=>{if(document.hidden||pendingChannels||$("#editor")?.open)return;if(pointTableBody()&&$("#point-live-refresh")?.checked)loadPoints({background:true}).catch(e=>toast(e.message))},2000);

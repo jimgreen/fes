@@ -534,11 +534,8 @@ class CanMaster(_CanTransport):
                         number -= wrap
                     value = number * scale + bias
             quality = raw[q_offset] & q_mask if 0 <= q_offset < len(raw) else 0
-            # 过滤硬件驱动返回的设备相对开机秒数（< 2000 年 Unix 时间戳），统一回退宿主墙钟防回采超时。
-            ts = frame.timestamp
-            if not ts or ts < 946684800.0:
-                ts = time.time()
-            return CanValue(rtu_id, point_no, kind, value, quality, frame, ts)
+            return CanValue(rtu_id, point_no, kind, value, quality, frame,
+                            frame.timestamp or time.time())
         return decode
 
     @staticmethod

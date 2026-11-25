@@ -7,6 +7,7 @@
     rtuId: '',
     q: '',
     mappedOnly: false,
+    anomalyOnly: false,
     limit: 100,
     offset: 0,
     total: 0,
@@ -23,8 +24,10 @@
     rtu: document.getElementById('pt-rtu'),
     query: document.getElementById('pt-query'),
     mappedOnly: document.getElementById('pt-mapped-only'),
+    anomalyOnly: document.getElementById('pt-anomaly-only'),
     auto: document.getElementById('pt-auto'),
     refresh: document.getElementById('pt-refresh'),
+    exportBtn: document.getElementById('pt-export'),
     summary: document.getElementById('pt-summary'),
     tbody: document.getElementById('pt-tbody'),
     footInfo: document.getElementById('pt-foot-info'),
@@ -95,6 +98,10 @@
     if (params.get('mapped_only') === '1') {
       state.mappedOnly = true;
       if (els.mappedOnly) els.mappedOnly.checked = true;
+    }
+    if (params.get('anomaly_only') === '1') {
+      state.anomalyOnly = true;
+      if (els.anomalyOnly) els.anomalyOnly.checked = true;
     }
     updateKindTabs();
   }
@@ -201,6 +208,7 @@
         limit: String(state.limit),
         offset: String(state.offset),
         mapped_only: state.mappedOnly ? '1' : '0',
+        anomaly_only: state.anomalyOnly ? '1' : '0',
       });
       if (state.rtuId) qs.set('rtu_id', state.rtuId);
       if (state.q) qs.set('q', state.q);
@@ -333,6 +341,32 @@
       state.mappedOnly = els.mappedOnly.checked;
       state.offset = 0;
       loadData();
+    });
+  }
+
+  if (els.anomalyOnly) {
+    els.anomalyOnly.addEventListener('change', () => {
+      state.anomalyOnly = els.anomalyOnly.checked;
+      state.offset = 0;
+      loadData();
+    });
+  }
+
+  if (els.exportBtn) {
+    els.exportBtn.addEventListener('click', () => {
+      const qs = new URLSearchParams({
+        kind: state.kind,
+        mapped_only: state.mappedOnly ? '1' : '0',
+        anomaly_only: state.anomalyOnly ? '1' : '0',
+      });
+      if (state.rtuId) qs.set('rtu_id', state.rtuId);
+      if (state.q) qs.set('q', state.q);
+      const a = document.createElement('a');
+      a.href = `/api/point-trace/export?${qs.toString()}`;
+      a.download = `point-trace-${state.kind}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     });
   }
 

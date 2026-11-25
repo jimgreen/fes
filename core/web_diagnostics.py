@@ -1,6 +1,70 @@
-"""Shared read-only diagnostics: persisted stage timings and config preflight."""
+"""Shared read-only diagnostics: persisted stage timings, storage/WAL health and config preflight."""
+import os
 from pathlib import Path
+import shutil
 import time
+
+
+_WAL_WARN_BYTES = 32 * 1024 * 1024
+_WAL_CRIT_BYTES = 128 * 1024 * 1024
+_LOG_USAGE_CACHE: dict[str, tuple[float, int, int]] = {}
+
+
+def _scan_dir_usage(root: Path, *, max_files: int = 4000) -> tuple[int, int]:
+    """带 30 秒缓存的目录占用统计，避免 5 秒轮询反复遍历大量日志文件。"""
+    key = str(root)
+    now = time.monotonic()
+    cached = _LOG_USAGE_CACHE.get(key)
+    if cached is not None and now - cached[0] < 30.0:
+        return cached[1], cached[2]
+    count = 0
+    total = 0
+    if root.is_dir():
+        for dirpath, _dirs, filenames in os.walk(root):
+            for name in filenames:
+                count += 1
+                try:
+                    total += os.stat(os.path.join(dirpath, name)).st_size
+                except OSError:
+                    pass
+                if count >= max_files:
+                    break
+            if count >= max_files:
+                break
+    _LOG_USAGE_CACHE[key] = (now, count, total)
+    return count, total
+
+
+def storage_health(store) -> dict:
+    """采集 SQLite 主库、WAL/SHM 体积、日志目录占用及所在磁盘剩余空间。"""
+    db_path = Path(store.db_path)
+    wal_path = Path(str(db_path) + "-wal")
+    shm_path = Path(str(db_path) + "-shm")
+    db_bytes = db_path.stat().st_size if db_path.is_file() else 0
+    wal_bytes = wal_path.stat().st_size if wal_path.is_file() else 0
+    shm_bytes = shm_path.stat().st_size if shm_path.is_file() else 0
+    wal_state = "critical" if wal_bytes >= _WAL_CRIT_BYTES else ("warn" if wal_bytes >= _WAL_WARN_BYTES else "ok")
+
+    log_dir = db_path.parent / "logs"
+    log_files, log_bytes = _scan_dir_usage(log_dir)
+    disk_free = disk_total = 0
+    try:
+        usage = shutil.disk_usage(db_path.parent if db_path.parent.exists() else Path.cwd())
+        disk_free = int(usage.free)
+        disk_total = int(usage.total)
+    except OSError:
+        pass
+    return {
+        "db_bytes": db_bytes,
+        "wal_bytes": wal_bytes,
+        "shm_bytes": shm_bytes,
+        "wal_state": wal_state,
+        "wal_warn_bytes": _WAL_WARN_BYTES,
+        "log_files": log_files,
+        "log_bytes": log_bytes,
+        "disk_free_bytes": disk_free,
+        "disk_total_bytes": disk_total,
+    }
 
 
 def handle_diagnostics(handler, parts, query, method, store, component):
@@ -61,6 +125,7 @@ def handle_diagnostics(handler, parts, query, method, store, component):
                 point_runtime=point_runtime,
                 pending_messages=row['diagnostic'].get('pending_messages')))
     payload=dict(component=component,items=rows,window=256,
+        storage=storage_health(store),
         note='分位数来自最近 256 个阶段样本，不可相加作为端到端时延；完整链路需用同一变化的关联验收记录。')
     if query.get('checks')=='1':
         from core.startup_checks import configuration_checks

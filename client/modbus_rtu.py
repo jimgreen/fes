@@ -133,11 +133,11 @@ class ModbusRtuMaster(_ModbusMasterOperations, _ModbusRtuTransport):
 
     def __init__(self, port, *, baudrate=9600, bytesize=8, parity='E', stopbits=1,
                  unit_id=1, timeout=3.0, rtu_id=None, calls=None, points=None,
-                 definitions=None, retry_count=0):
+                 definitions=None, retry_count=0, coalesce_reads=False):
         super().__init__(port, baudrate=baudrate, bytesize=bytesize, parity=parity,
                          stopbits=stopbits, unit_id=unit_id, timeout=timeout, rtu_id=rtu_id,
                          retry_count=retry_count)
-        self._init_master(calls, points, definitions)
+        self._init_master(calls, points, definitions, coalesce_reads=coalesce_reads)
 
     @classmethod
     def from_channel(cls, channel, **kwargs):

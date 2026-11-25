@@ -23,8 +23,10 @@
         <select id="pt-rtu" class="pt-select" aria-label="筛选 RTU"><option value="">全部 RTU</option></select>
         <input id="pt-query" class="pt-search" type="search" maxlength="120" placeholder="点号 / 名称 / RTU" aria-label="检索点号或名称" autocomplete="off">
         <label class="pt-check"><input id="pt-mapped-only" type="checkbox"><span>仅看已映射</span></label>
+        <label class="pt-check"><input id="pt-anomaly-only" type="checkbox"><span>仅看异常</span></label>
         <label class="pt-check"><input id="pt-auto" type="checkbox" checked><span>5 秒刷新</span></label>
         <button id="pt-refresh" type="button" class="primary">刷新</button>
+        <button id="pt-export" type="button">导出 CSV</button>
         <div class="pt-summary" id="pt-summary" role="status" aria-live="polite">加载中…</div>
       </div>
 

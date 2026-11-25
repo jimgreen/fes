@@ -229,6 +229,138 @@
     trackerTimer = setInterval(() => { if (!document.hidden) poll(); }, 1000);
   }
 
+  // ==================== 4. 三端顶栏快捷互跳（C | S | T）与运维权限状态 ====================
+  function buildSiblingUrl(baseUrl, targetKey) {
+    const ctx = readFocus();
+    const u = new URL(baseUrl);
+    if (targetKey === "c") {
+      if (ctx.rtu_id) u.searchParams.set("rtu_id", ctx.rtu_id);
+    } else if (targetKey === "s") {
+      u.pathname = "/test";
+      if (ctx.rtu_id) u.searchParams.set("rtu_id", ctx.rtu_id);
+    } else if (targetKey === "t") {
+      u.pathname = "/communication";
+      if (ctx.channel_id) u.searchParams.set("channel_id", ctx.channel_id);
+    }
+    return u.toString();
+  }
+
+  function renderAuthButton(auth) {
+    const tools = document.querySelector(".header-tools");
+    if (!tools || !auth || auth.mode === "open") return;
+    let btn = document.getElementById("ui-auth-chip");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.id = "ui-auth-chip";
+      btn.type = "button";
+      btn.className = "ui-auth-chip";
+      tools.prepend(btn);
+    }
+    if (auth.readonly) {
+      btn.textContent = "只读模式";
+      btn.className = "ui-auth-chip is-readonly";
+      btn.disabled = true;
+      btn.title = "服务端已强制开启只读观察模式（SCADA_WEB_READONLY=1）";
+      return;
+    }
+    btn.disabled = false;
+    if (auth.unlocked) {
+      btn.textContent = "运维已解锁";
+      btn.className = "ui-auth-chip is-unlocked";
+      btn.title = "点击锁定并切回只读观察模式";
+      btn.onclick = async () => {
+        await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+        location.reload();
+      };
+    } else {
+      btn.textContent = "只读 · 解锁";
+      btn.className = "ui-auth-chip is-locked";
+      btn.title = "当前处于只读保护态，点击输入运维口令解锁写操作";
+      btn.onclick = () => openAuthDialog();
+    }
+  }
+
+  function openAuthDialog() {
+    let dlg = document.getElementById("ui-auth-dialog");
+    if (!dlg) {
+      dlg = document.createElement("dialog");
+      dlg.id = "ui-auth-dialog";
+      dlg.className = "ui-auth-dialog";
+      dlg.innerHTML =
+        '<form method="dialog" id="ui-auth-form">' +
+        '<div class="ui-auth-head"><strong>解锁运维权限</strong><button type="button" id="ui-auth-close" aria-label="关闭">×</button></div>' +
+        '<div class="ui-auth-body"><label>运维口令<input id="ui-auth-token" type="password" required autocomplete="current-password" placeholder="输入 SCADA_WEB_OPERATOR_TOKEN"></label>' +
+        '<p id="ui-auth-err" class="ui-auth-err" role="alert"></p></div>' +
+        '<div class="ui-auth-foot"><button type="button" id="ui-auth-cancel">取消</button><button type="submit" class="primary">确认解锁</button></div>' +
+        '</form>';
+      document.body.appendChild(dlg);
+      dlg.querySelector("#ui-auth-close").onclick = () => dlg.close();
+      dlg.querySelector("#ui-auth-cancel").onclick = () => dlg.close();
+      dlg.querySelector("#ui-auth-form").onsubmit = async (ev) => {
+        ev.preventDefault();
+        const errEl = dlg.querySelector("#ui-auth-err");
+        const tokenEl = dlg.querySelector("#ui-auth-token");
+        errEl.textContent = "";
+        try {
+          const resp = await fetch("/api/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: tokenEl.value }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(data.error?.message || "口令错误");
+          dlg.close();
+          renderAuthButton(data);
+        } catch (err) {
+          errEl.textContent = err.message || "解锁失败";
+        }
+      };
+    }
+    const errEl = dlg.querySelector("#ui-auth-err");
+    const tokenEl = dlg.querySelector("#ui-auth-token");
+    if (errEl) errEl.textContent = "";
+    if (tokenEl) tokenEl.value = "";
+    dlg.showModal();
+    tokenEl?.focus();
+  }
+
+  async function initWorkbenchLinks() {
+    const brand = document.querySelector(".workbench-brand, .topbar .brand");
+    if (!brand || document.getElementById("ui-sibling-nav")) return;
+    try {
+      const resp = await fetch("/api/workbench-links", { cache: "no-cache" });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.auth) renderAuthButton(data.auth);
+      const links = Array.isArray(data.links) ? data.links : [];
+      if (!links.length) return;
+      const nav = document.createElement("nav");
+      nav.id = "ui-sibling-nav";
+      nav.className = "ui-sibling-nav";
+      nav.setAttribute("aria-label", "三端系统快捷切换");
+      links.forEach((item) => {
+        const a = document.createElement("a");
+        a.className = "ui-sibling-link" + (item.active ? " is-active" : "");
+        a.textContent = item.label;
+        a.href = item.active ? "#" : item.url;
+        if (item.active) {
+          a.setAttribute("aria-current", "true");
+          a.onclick = (e) => e.preventDefault();
+        } else {
+          a.onclick = (e) => {
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            location.href = buildSiblingUrl(item.url, item.key);
+          };
+        }
+        nav.appendChild(a);
+      });
+      brand.insertAdjacentElement("afterend", nav);
+    } catch (_) {
+      // 忽略网络异常，不影响主界面
+    }
+  }
+
   window.scadaFocusContext = { read: readFocus, write: writeFocus, set: writeFocus, clear: clearFocus };
   window.scadaTrackCommand = scadaTrackCommand;
 
@@ -236,6 +368,7 @@
     syncFocusFromUrl();
     renderFocusChip();
     bindFocusWatchers();
+    initWorkbenchLinks();
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, { once: true });

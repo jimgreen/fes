@@ -61,7 +61,8 @@
         <div id="checks" class="diag-side-scroll"></div>
       </section>
       <section class="diag-side-card diag-side-compact">
-        <div class="diag-side-head"><h3 title="提交耗时可能包含自动检查点；WAL 大小不等于未提交数据量">数据库等待与 WAL</h3></div>
+        <div class="diag-side-head"><h3 title="提交耗时可能包含自动检查点；WAL 大小不等于未提交数据量">数据库等待与 WAL</h3><button type="button" id="wal-checkpoint-btn" class="diag-mini-btn" title="执行 PRAGMA wal_checkpoint(TRUNCATE) 整理 WAL">WAL 整理</button></div>
+        <div id="storage-health" class="diag-storage-health"></div>
         <div id="database-wait" class="muted diag-side-text"></div>
       </section>
       <section class="diag-side-card diag-side-compact">

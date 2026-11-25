@@ -631,7 +631,10 @@
       if (!resp.ok) throw new Error(data.error?.message || `HTTP ${resp.status}`);
       bar.querySelector(".lb-decode-title").textContent = `${data.protocol} · ${data.direction}`;
       bar.querySelector(".lb-decode-meta").textContent = `${data.byte_count} 字节`;
-      bar.querySelector(".lb-decode-body").textContent = `${data.decoded}\nHEX: ${data.hex}`;
+      const detailLines = Array.isArray(data.details) && data.details.length
+        ? "\n明细:\n  " + data.details.join("\n  ")
+        : "";
+      bar.querySelector(".lb-decode-body").textContent = `${data.decoded}${detailLines}\nHEX: ${data.hex}`;
     } catch (err) {
       bar.querySelector(".lb-decode-title").textContent = "译码提示";
       bar.querySelector(".lb-decode-body").textContent = err.message || "无法解析该行报文";

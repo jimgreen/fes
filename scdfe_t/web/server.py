@@ -179,6 +179,22 @@ class TransHandler(BaseScadaHandlerMixin, RequestBodyMixin, BaseHTTPRequestHandl
             if method != "POST":
                 raise ApiError(405, "批量点映射只支持 POST")
             return self._json(201, {"items": self.service.create_points_batch(cid, self._body())})
+        if len(tail) == 4 and tail[3] == "export-csv":
+            if method != "GET":
+                raise ApiError(405, "点映射 CSV 导出只支持 GET")
+            kind = query.get("kind")
+            raw_csv = self.service.export_points_csv(cid, kind=kind)
+            suffix = f"-{kind}" if kind else ""
+            self._send(200, "text/csv; charset=utf-8", raw_csv, {
+                "Content-Disposition": f'attachment; filename="trans-ch{cid}{suffix}-points.csv"',
+                "Cache-Control": "no-store",
+            })
+            return
+        if len(tail) == 4 and tail[3] == "import-csv":
+            if method != "POST":
+                raise ApiError(405, "点映射 CSV 导入只支持 POST")
+            result = self.service.import_points_csv(cid, self._body())
+            return self._json(200 if result.get("dry_run") else 201, result)
         if len(tail) == 3:
             if method == "GET":
                 if set(query) - {"kind", "limit", "offset", "name_contains"}:
@@ -261,6 +277,8 @@ class TransHandler(BaseScadaHandlerMixin, RequestBodyMixin, BaseHTTPRequestHandl
         try:
             self._prepare_request()
             parts, query = self._parts()
+            from core.web_security import enforce_web_access
+            enforce_web_access(self, parts, 'GET' if self.command == 'HEAD' else self.command)
             if handle_database(self, parts, query, 'GET' if self.command == 'HEAD' else self.command) is not False:
                 return
             from core.web_diagnostics import handle_diagnostics

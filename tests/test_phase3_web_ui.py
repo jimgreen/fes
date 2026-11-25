@@ -1,4 +1,4 @@
-"""Phase 3 Web 后端统一、静态缓存、写锁消除、审计与前端自明性/选择题改造专项回归测试。"""
+"""Phase 3 Web 后端统一、静态缓存、写锁消除、审计与前端自明性/选择题改造专项回归测试（fes 仓 C/S/T）。"""
 from __future__ import annotations
 
 from contextlib import closing
@@ -10,8 +10,8 @@ import threading
 import unittest
 
 from scdfe_c.web.process_control import ProcessController
+from scdfe_c.web.server import make_server as make_c_server
 from scdfe_c.web.service import ApiError, ScadaStore
-from scdfe_d.web.server import make_server as make_d_server
 from scdfe_t.web.server import make_server as make_t_server
 from scdfe_t.web.service import TransStore
 
@@ -29,13 +29,11 @@ class Phase3WebRegressionTests(unittest.TestCase):
                     "channel_id": 1, "name": "转发1", "protocol": "iec104",
                     "bind_host": "127.0.0.1", "bind_port": 2404,
                 })
-                # 同批次不同 kind 使用相同转发点号 1 应成功
                 created = trans.create_points_batch(1, {"items": [
                     {"kind": "yc", "pnt_no": 1, "source_rtu_id": 1, "source_pnt_no": 1},
                     {"kind": "yx", "pnt_no": 1, "source_rtu_id": 1, "source_pnt_no": 1},
                 ]})
                 self.assertEqual(len(created), 2)
-                # 再次批量插入已存在的 (yc, 1) 应返回 409 ApiError 而非未捕获 sqlite3.IntegrityError
                 with self.assertRaises(ApiError) as ctx:
                     trans.create_points_batch(1, {"items": [
                         {"kind": "yc", "pnt_no": 1, "source_rtu_id": 1, "source_pnt_no": 2},
@@ -50,13 +48,11 @@ class Phase3WebRegressionTests(unittest.TestCase):
             db = Path(folder) / "scdfe_c.sqlite3"
             with closing(ScadaStore(db)) as store:
                 ctrl = ProcessController(store)
-                # 首次调用会初始化系统行
                 first = ctrl.snapshot()
                 self.assertGreaterEqual(len(first["items"]), 3)
                 with store.connection() as con:
                     ver_before = con.execute("PRAGMA data_version").fetchone()[0]
                     changes_before = con.total_changes
-                # 稳态再次调用不应执行任何 INSERT/UPDATE
                 second = ctrl.snapshot()
                 self.assertEqual(len(second["items"]), len(first["items"]))
                 with store.connection() as con:
@@ -93,22 +89,25 @@ class Phase3WebRegressionTests(unittest.TestCase):
                 server.server_close()
                 thread.join(3)
 
-    def test_scdfe_d_write_request_emits_operation_audit_log_and_security_headers(self):
+    def test_scdfe_t_write_request_emits_operation_audit_log_and_security_headers(self):
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_d.sqlite3"
-            server = make_d_server("127.0.0.1", 0, db_path=db, workspace_root=Path(folder))
+            db = Path(folder) / "scdfe_c.sqlite3"
+            server = make_t_server("127.0.0.1", 0, db_path=db, workspace_root=Path(folder))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
                 port = server.server_address[1]
                 conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
                 try:
-                    body = json.dumps({"name": "机组1", "category": "generator"}).encode("utf-8")
-                    conn.request("POST", "/api/devices", body=body, headers={"Content-Type": "application/json"})
+                    body = json.dumps({
+                        "channel_id": 1, "name": "审计通道1", "protocol": "iec104",
+                        "bind_host": "127.0.0.1", "bind_port": 2404,
+                    }).encode("utf-8")
+                    conn.request("POST", "/api/trans/channels", body=body, headers={"Content-Type": "application/json"})
                     resp = conn.getresponse()
                     resp.read()
                     self.assertEqual(resp.status, 201)
-                    self.assertEqual(resp.getheader("X-Frame-Options"), "SAMEORIGIN")
+                    self.assertEqual(resp.getheader("X-Frame-Options"), "DENY")
                     self.assertEqual(resp.getheader("Referrer-Policy"), "same-origin")
                 finally:
                     conn.close()
@@ -116,21 +115,19 @@ class Phase3WebRegressionTests(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(3)
-            audit_files = list((Path(folder) / "logs").rglob("scdfe_d-operations-*.log"))
+            audit_files = list((Path(folder) / "logs").rglob("scdfe_t-operations-*.log"))
             self.assertEqual(len(audit_files), 1)
             text = audit_files[0].read_text(encoding="utf-8")
             self.assertIn("请求到达", text)
             self.assertIn("业务返回", text)
             self.assertIn("请求结束", text)
 
-    def test_ui_templates_use_select_instead_of_free_text_and_remove_window_prompt(self):
+    def test_ui_templates_use_select_instead_of_free_text(self):
         soe_html = (ROOT / "core" / "web_static" / "soe.html").read_text(encoding="utf-8")
         self.assertIn('<select id="rtu">', soe_html)
         t_logs = (ROOT / "scdfe_t" / "web" / "static" / "logs.html").read_text(encoding="utf-8")
         self.assertIn('<select id="lb-channel"', t_logs)
         self.assertIn('type="datetime-local"', t_logs)
-        d_app = (ROOT / "scdfe_d" / "web" / "static" / "app.js").read_text(encoding="utf-8")
-        self.assertNotIn("prompt(", d_app)
         t_app = (ROOT / "scdfe_t" / "web" / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn("addr_base", t_app)
         self.assertIn("iec_type", t_app)
@@ -165,8 +162,8 @@ class Phase3WebRegressionTests(unittest.TestCase):
         self.assertNotIn("https://", i18n_js)
 
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_d.sqlite3"
-            server = make_d_server("127.0.0.1", 0, db_path=db, workspace_root=Path(folder))
+            db = Path(folder) / "scdfe_c.sqlite3"
+            server = make_c_server("127.0.0.1", 0, db_path=db, workspace_root=Path(folder))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:

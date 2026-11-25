@@ -277,6 +277,18 @@
         `${x.name || x.channel_id}：扫描 ${x.source_delta.polls} 次，读取 ${x.source_delta.rows_read} 行，无变化 ${x.source_delta.unchanged_polls} 次`
       ).join('；');
 
+      if (data.storage && $('storage-health')) {
+        const s = data.storage;
+        const mib = b => ((Number(b) || 0) / 1048576).toFixed(2);
+        const gib = b => ((Number(b) || 0) / 1073741824).toFixed(1);
+        const walCls = s.wal_state === 'critical' ? 'is-crit' : (s.wal_state === 'warn' ? 'is-warn' : 'is-ok');
+        const walLabel = s.wal_state === 'critical' ? 'WAL 过高' : (s.wal_state === 'warn' ? 'WAL 偏大' : 'WAL 正常');
+        setHTML('storage-health',
+          `<span class="diag-wal-pill ${walCls}">${walLabel} ${mib(s.wal_bytes)} MiB</span>` +
+          `<span class="muted">主库 ${mib(s.db_bytes)} MiB · 日志 ${s.log_files} 文件(${mib(s.log_bytes)} MiB) · 磁盘余 ${gib(s.disk_free_bytes)} GiB</span>`
+        );
+      }
+
       $('database-wait').textContent = data.items.filter(x => x.database_wait).map(x =>
         `${x.name || x.service}：锁冲突 ${x.database_wait.lock_conflicts} 次，累计退避 ${x.database_wait.retry_backoff_ms} ms，WAL ${(x.database_wait.wal_bytes / 1048576).toFixed(2)} MiB，自动检查点阈值 ${x.database_wait.wal_autocheckpoint_pages} 页，待写 ${x.pending_messages ?? 0} 条消息`
       ).join('\n') || '暂无写库等待样本';
@@ -389,6 +401,31 @@
       auditBusy = false;
       if ($('audit-refresh')) $('audit-refresh').disabled = false;
     }
+  }
+  if ($('wal-checkpoint-btn')) {
+    $('wal-checkpoint-btn').onclick = async () => {
+      const btn = $('wal-checkpoint-btn');
+      btn.disabled = true;
+      try {
+        const resp = await fetch('/api/diagnostics/wal-checkpoint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'TRUNCATE' }),
+        });
+        const res = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw Error(res.error?.message || `HTTP ${resp.status}`);
+        const beforeMb = ((res.wal_bytes_before || 0) / 1048576).toFixed(2);
+        const afterMb = ((res.wal_bytes_after || 0) / 1048576).toFixed(2);
+        $('message').dataset.error = 'false';
+        $('message').textContent = `WAL 整理完成：${beforeMb} → ${afterMb} MiB（检查点 ${res.checkpointed_frames}/${res.log_frames} 页）`;
+        load(false);
+      } catch (err) {
+        $('message').dataset.error = 'true';
+        $('message').textContent = err.message || 'WAL 整理失败';
+      } finally {
+        btn.disabled = false;
+      }
+    };
   }
   if ($('audit-refresh')) $('audit-refresh').onclick = loadAudit;
   if ($('audit-query')) {
