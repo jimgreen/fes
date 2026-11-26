@@ -36,7 +36,7 @@ class ProtocolStoreProjectionTests(unittest.TestCase):
 
     def test_joined_bacnet_and_opc_point_queries_keep_mapping_rows(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "scada.sqlite3")
+            store = ScadaStore(Path(directory) / "scada.db")
             store.create_row("fes_rtu_define", {
                 "rtu_id": 7, "channel_id": 70, "channel_type": "bacnet",
             })

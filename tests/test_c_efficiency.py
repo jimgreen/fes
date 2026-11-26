@@ -14,7 +14,7 @@ class EfficiencyTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.store = ScadaStore(self.root / 'db.sqlite3', connection_pool_size=2)
+        self.store = ScadaStore(self.root / 'db.db', connection_pool_size=2)
         self.addCleanup(self.store.close)
 
     def test_summary_and_full_overview_include_every_station(self):

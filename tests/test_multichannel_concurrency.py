@@ -27,7 +27,7 @@ class ChannelConcurrencyTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.db = Path(tmp.name) / 'scada.sqlite3'
+        self.db = Path(tmp.name) / 'scada.db'
         self.t = TransStore(self.db, connection_pool_size=2)
         self.addCleanup(self.t.store.close)
 
@@ -84,7 +84,7 @@ class ChannelConcurrencyTests(unittest.TestCase):
     def test_four_live_forwarders_parallel_writes_reads_and_channel_logs(self):
         webs = {}
         for f, factory in zip('cst',(cweb,sweb,tweb)):
-            srv = factory('127.0.0.1',0,db_path=self.db.with_name('scdfe_s.sqlite3') if f=='s' else self.db)
+            srv = factory('127.0.0.1',0,db_path=self.db.with_name('scdfe_s.db') if f=='s' else self.db)
             thread = threading.Thread(target=srv.serve_forever,daemon=True)
             thread.start()
             self.addCleanup(srv.server_close)

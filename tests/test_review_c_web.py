@@ -17,7 +17,7 @@ from core.scdfe_control import CONTROL_TABLE, ensure_control_row
 class ReviewedCWebTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.server = make_server("127.0.0.1", 0, db_path=Path(self.temp.name) / "scada.sqlite3")
+        self.server = make_server("127.0.0.1", 0, db_path=Path(self.temp.name) / "scada.db")
         self.store = self.server.store
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

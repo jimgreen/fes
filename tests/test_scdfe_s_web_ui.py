@@ -14,7 +14,7 @@ from scdfe_s.web.server import make_server
 class ScdfeSWebUiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.db = Path(self.temp.name) / "scada.sqlite3"
+        self.db = Path(self.temp.name) / "scada.db"
         self.httpd = make_server("127.0.0.1", 0, db_path=self.db)
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()

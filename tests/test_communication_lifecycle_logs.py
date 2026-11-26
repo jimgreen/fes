@@ -15,7 +15,7 @@ class CommunicationLifecycleLogsTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.store = ScadaStore(self.root / 'scada.sqlite3')
+        self.store = ScadaStore(self.root / 'scada.db')
         self.addCleanup(self.store.close)
         self.logs = self.root / 'logs'
         self.store.create_row('fes_channel_modbus_tcp_define', {

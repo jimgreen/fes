@@ -18,10 +18,10 @@ class RequestBoundaryTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        self.db = Path(temp.name) / 'scada.sqlite3'
+        self.db = Path(temp.name) / 'scada.db'
         self.servers = {}
         for family, factory in (('c', c_server), ('s', s_server), ('t', t_server)):
-            web = factory('127.0.0.1', 0, db_path=self.db.with_name('scdfe_s.sqlite3') if family == 's' else self.db)
+            web = factory('127.0.0.1', 0, db_path=self.db.with_name('scdfe_s.db') if family == 's' else self.db)
             thread = threading.Thread(target=web.serve_forever, daemon=True)
             thread.start()
             self.addCleanup(lambda w=web,t=thread: (w.shutdown(),w.server_close(),t.join(3)))

@@ -133,7 +133,7 @@ class Queue:
 
 def database_pipeline(runtime, com, root):
     root.mkdir(parents=True)
-    con = sqlite3.connect(root/'isolated.sqlite3', isolation_level=None)
+    con = sqlite3.connect(root/'isolated.db', isolation_level=None)
     con.execute('PRAGMA journal_mode=WAL')
     con.execute('PRAGMA synchronous=NORMAL')
     for kind in ('yc', 'yx'):

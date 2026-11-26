@@ -23,7 +23,7 @@ class WebUxEnhancementsTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.db = Path(self.temp.name) / "ux_test.sqlite3"
+        self.db = Path(self.temp.name) / "ux_test.db"
         self.t_service = TransStore(self.db)
         with self.t_service.store.connection() as con:
             con.execute(

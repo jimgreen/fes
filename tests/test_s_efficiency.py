@@ -14,7 +14,7 @@ class ServiceEfficiencyTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        self.store = ScadaStore(self.root / "scada.sqlite3", connection_pool_size=2)
+        self.store = ScadaStore(self.root / "scada.db", connection_pool_size=2)
         self.addCleanup(self.store.close)
         for rid, proto in [(1, 'can'), (2, 'opc'), (3, 'bacnet'), (4, 'iec104')]:
             self.store.create_row('fes_rtu_define',dict(rtu_id=rid,channel_id=rid,channel_type=proto))

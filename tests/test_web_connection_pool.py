@@ -15,7 +15,7 @@ class WebConnectionPoolTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.store = ScadaStore(Path(self.temp.name)/'db.sqlite3', connection_pool_size=2)
+        self.store = ScadaStore(Path(self.temp.name)/'db.db', connection_pool_size=2)
         self.addCleanup(self.store.close)
         self.store.create_row('fes_rtu_define', {'rtu_id':7,'channel_id':7,'channel_type':'modbus-tcp'})
         self.store.create_row('fes_yc_define', {'rtu_id':7,'pnt_no':1,'value':0})
@@ -94,17 +94,17 @@ class WebConnectionPoolTests(unittest.TestCase):
         self.store.db_path.unlink()
 
     def test_default_store_still_closes_each_connection(self):
-        store=ScadaStore(Path(self.temp.name)/'default.sqlite3')
+        store=ScadaStore(Path(self.temp.name)/'default.db')
         with store.connection() as con: con.execute('SELECT 1')
         with self.assertRaises(sqlite3.ProgrammingError): con.execute('SELECT 1')
         store.db_path.unlink()
 
     def test_server_close_and_failed_bind_release_database(self):
-        path=Path(self.temp.name)/'web.sqlite3'
+        path=Path(self.temp.name)/'web.db'
         server=make_server('127.0.0.1',0,db_path=path)
         try:
             self.assertTrue(server.store.connection_pool_size)
-            other=Path(self.temp.name)/'failed.sqlite3'
+            other=Path(self.temp.name)/'failed.db'
             with patch.object(type(server), 'server_bind', side_effect=OSError('bind failed')), self.assertRaises(OSError):
                 make_server('127.0.0.1',server.server_port,db_path=other)
             other.unlink()

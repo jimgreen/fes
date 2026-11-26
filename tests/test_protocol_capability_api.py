@@ -14,7 +14,7 @@ class CapabilityApiContracts(unittest.TestCase):
     def test_all_components_report_actual_scope(self):
         for component, maker in [('scdfe_c',make_c),('scdfe_s',make_s),('scdfe_t',make_t)]:
             with self.subTest(component=component), tempfile.TemporaryDirectory() as directory:
-                server = maker('127.0.0.1',0,db_path=Path(directory)/'scada.sqlite3')
+                server = maker('127.0.0.1',0,db_path=Path(directory)/'scada.db')
                 thread = threading.Thread(target=server.serve_forever,daemon=True); thread.start()
                 client = http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=3)
                 try:

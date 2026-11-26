@@ -14,8 +14,8 @@ from scdfe_s.web.server import make_server
 class SimulatorDatabaseTests(unittest.TestCase):
     def test_wrong_database_is_rejected_in_both_directions(self):
         with tempfile.TemporaryDirectory() as root:
-            business = Path(root) / "custom-business.sqlite3"
-            simulator = Path(root) / "custom-simulator.sqlite3"
+            business = Path(root) / "custom-business.db"
+            simulator = Path(root) / "custom-simulator.db"
             self.assertNotEqual(DEFAULT_DB, SYSTEM_DB)
             with self.assertRaisesRegex(ValueError, "业务库"):
                 make_server(port=0, db_path=SYSTEM_DB)

@@ -25,14 +25,14 @@ class WebFileRootTests(unittest.TestCase):
                 parent = Path(folder)
                 root = parent / 'workspace'; root.mkdir()
                 outside = parent / 'workspace-other'; outside.mkdir()
-                marker = outside / 'do-not-touch.sqlite3'; marker.write_bytes(b'unchanged')
+                marker = outside / 'do-not-touch.db'; marker.write_bytes(b'unchanged')
                 link = root / 'outside-link'
                 if os.name == 'nt':
                     subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(outside)],
                                    check=True, capture_output=True)
                 else:
                     link.symlink_to(outside, target_is_directory=True)
-                db = root / f'scdfe_{role}.sqlite3'
+                db = root / f'scdfe_{role}.db'
                 server = factory('127.0.0.1', 0, db_path=db, workspace_root=root)
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
                 try:
@@ -46,10 +46,10 @@ class WebFileRootTests(unittest.TestCase):
                     for path in ['..', '../workspace-other', str(outside), 'outside-link']:
                         for method, url, body in [
                             ('GET', '/api/database/tree?directory=' + quote(path), None),
-                            ('GET', '/api/database/validate?path=' + quote(path + '/do-not-touch.sqlite3'), None),
-                            ('POST', '/api/database', {'database': path + '/do-not-touch.sqlite3', 'expected_database': info['database']}),
+                            ('GET', '/api/database/validate?path=' + quote(path + '/do-not-touch.db'), None),
+                            ('POST', '/api/database', {'database': path + '/do-not-touch.db', 'expected_database': info['database']}),
                             ('POST', '/api/database/mkdir', {'directory': path, 'name': 'new-folder'}),
-                            ('POST', '/api/database/create', {'directory': path, 'name': 'new.sqlite3'}),
+                            ('POST', '/api/database/create', {'directory': path, 'name': 'new.db'}),
                         ]:
                             code, body = self.request(server, method, url, body)
                             self.assertEqual(code, 400, (path, url, body))
@@ -83,8 +83,8 @@ class WebFileRootTests(unittest.TestCase):
             parent = Path(folder); root = parent / 'root'; root.mkdir()
             for factory in [make_c, make_s, make_t]:
                 with self.assertRaises(ValueError):
-                    factory(port=0, db_path=parent / 'outside.sqlite3', workspace_root=root)
-                self.assertFalse((parent / 'outside.sqlite3').exists())
+                    factory(port=0, db_path=parent / 'outside.db', workspace_root=root)
+                self.assertFalse((parent / 'outside.db').exists())
 
     def test_startup_rejects_external_log_directory_link(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -99,8 +99,8 @@ class WebFileRootTests(unittest.TestCase):
             try:
                 for factory in [make_c, make_s, make_t]:
                     with self.assertRaises(ApiError):
-                        factory(port=0, db_path=root / 'new.sqlite3', workspace_root=root)
-                    self.assertFalse((root / 'new.sqlite3').exists())
+                        factory(port=0, db_path=root / 'new.db', workspace_root=root)
+                    self.assertFalse((root / 'new.db').exists())
                 self.assertEqual(list(outside.iterdir()), [])
             finally:
                 if os.name == 'nt':
@@ -113,14 +113,14 @@ class WebFileRootTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             parent = Path(folder); root = parent / 'workspace'; root.mkdir()
             web = parent / 'scdfe_c' / 'web'; web.mkdir(parents=True)
-            db = root / 'existing.sqlite3'; db.touch()
+            db = root / 'existing.db'; db.touch()
             preference = parent / 'selection.json'
-            preference.write_text(json.dumps({'database': '../../workspace/existing.sqlite3',
+            preference.write_text(json.dumps({'database': '../../workspace/existing.db',
                                               'base_directory': str(web)}))
             self.assertEqual(selected_database(preference, None, None, workspace_root=root), db.resolve())
-            self.assertEqual(selected_database(preference, 'existing.sqlite3', None, workspace_root=root), db.resolve())
+            self.assertEqual(selected_database(preference, 'existing.db', None, workspace_root=root), db.resolve())
             with self.assertRaises(ValueError):
-                selected_database(preference, '../outside.sqlite3', None, workspace_root=root)
-            preference.write_text(json.dumps({'database': '../outside.sqlite3', 'workspace_root': str(root)}))
+                selected_database(preference, '../outside.db', None, workspace_root=root)
+            preference.write_text(json.dumps({'database': '../outside.db', 'workspace_root': str(root)}))
             with self.assertRaises(ValueError):
                 selected_database(preference, None, None, workspace_root=root)

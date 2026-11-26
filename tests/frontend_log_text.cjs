@@ -45,7 +45,7 @@ fs.writeFileSync(path.join(output,'stored.log'),lines.join('\n')+'\n');
           contentType: url.pathname.endsWith('.js') ? 'application/javascript' : 'text/css',
           body:fs.readFileSync(path.join(root,'core/web_static',path.basename(url.pathname)))});
         let data;
-        if (url.pathname === '/api/health') data = {status:'ok',database:'isolated/test.sqlite3'};
+        if (url.pathname === '/api/health') data = {status:'ok',database:'isolated/test.db'};
         else if (url.pathname === '/api/log-files') data = {directory:'isolated/logs',items:[{
           name:filename,process,hour:'20261114-22',size:Buffer.byteLength(lines.join('\n')),channel_id:8,modified_at:'2026-11-14T22:00:00Z'}]};
         else if (url.pathname === '/api/rtus') data = {items:[{rtu_id:9,channel_id:8,name:'日志验证通道'}]};

@@ -9,7 +9,7 @@ from scdfe_t.web.service import TransStore
 class ScdfeTransSchemaTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.db = Path(self.tmp.name) / "scada.sqlite3"
+        self.db = Path(self.tmp.name) / "scada.db"
         self.trans = TransStore(self.db)
         self.store = self.trans.store
         self.trans.create_channel({

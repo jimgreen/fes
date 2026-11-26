@@ -35,7 +35,7 @@ class AuditTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
 
     def server(self, factory):
-        server = factory('127.0.0.1', 0, db_path=self.root / factory.__module__.split('.')[0] / 'test.sqlite3')
+        server = factory('127.0.0.1', 0, db_path=self.root / factory.__module__.split('.')[0] / 'test.db')
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         self.addCleanup(lambda: (server.shutdown(), server.server_close(), thread.join(3)))
@@ -131,7 +131,7 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(len(records(self.root)), 16)
 
     def test_batch_commit_and_rollback_are_distinguished(self):
-        store = ScadaStore(self.root / 'batch.sqlite3')
+        store = ScadaStore(self.root / 'batch.db')
         for rid in range(1, 26):
             store.create_row('fes_rtu_define', {'rtu_id': rid, 'channel_id': rid, 'channel_type': 'iec104', 'name': 'old'})
         with audit.scope('c', self.root, source='test') as success:
@@ -167,7 +167,7 @@ class AuditTests(unittest.TestCase):
         self.assertFalse(any(r['phase'] == '任务完成' for r in rows))
 
     def test_audit_disk_failure_does_not_turn_committed_write_into_retry(self):
-        store = ScadaStore(self.root / 'disk.sqlite3')
+        store = ScadaStore(self.root / 'disk.db')
         with audit.scope('c', self.root / 'logs', source='test'):
             with patch.object(Path, 'open', side_effect=OSError('disk full')), self.assertLogs(audit.LOG, 'ERROR') as log:
                 store.create_row('fes_rtu_define', {'rtu_id': 1, 'channel_id': 1, 'channel_type': 'iec104'})

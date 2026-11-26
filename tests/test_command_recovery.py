@@ -28,7 +28,7 @@ class RecoveryTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        self.db = Path(temp.name) / 'scada.sqlite3'
+        self.db = Path(temp.name) / 'scada.db'
         self.store = ScadaStore(self.db)
         self.addCleanup(self.store.close)
 
@@ -83,7 +83,7 @@ class RecoveryTests(unittest.TestCase):
         for name,data in [('iec104_server_config.json',{'port':99999}),
                           ('modbus_tcp_service_config.json',{'remote_port':99999})]:
             (self.db.parent/name).write_text(json.dumps(data))
-        web=make_server('127.0.0.1',0,db_path=self.db.with_name('scdfe_s.sqlite3'))
+        web=make_server('127.0.0.1',0,db_path=self.db.with_name('scdfe_s.db'))
         self.addCleanup(web.server_close)
         for svc in (web.iec104_service,web.modbus_tcp_service):
             self.assertFalse(svc.running)

@@ -9,7 +9,7 @@ from scdfe_c.web.service import ScadaStore
 
 @pytest.fixture
 def store(tmp_path):
-    data=ScadaStore(tmp_path/'commands.sqlite3',connection_pool_size=2)
+    data=ScadaStore(tmp_path/'commands.db',connection_pool_size=2)
     with data.connection() as con:
         con.execute('BEGIN')
         for rid in (1,2):
@@ -84,7 +84,7 @@ def test_command_diagnostics_bounded_and_persisted_through_http(tmp_path):
     for n in range(30):stats.record(dict(committed=True,total_ms=150,lock_wait_ms=120),[(1,'yk',1,1)],[dict(cmd_time=n)],None)
     snapshot=stats.snapshot()
     assert snapshot['count']==30 and len(snapshot['recent'])==16
-    server=make_server('127.0.0.1',0,db_path=tmp_path/'api.sqlite3')
+    server=make_server('127.0.0.1',0,db_path=tmp_path/'api.db')
     RuntimeStatusStore(server.trans_store.store,'scdfe_t').upsert(7,dict(channel_name='指令诊断',running=1,diagnostic_json={'command_write':snapshot}))
     thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
     try:

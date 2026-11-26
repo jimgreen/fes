@@ -39,7 +39,7 @@ class ScdfeTTestBase(unittest.TestCase):
         # Cleanups run in reverse order after tearDown: close the clients and
         # servers registered below before removing their active log directory.
         self.addCleanup(self.temp.cleanup)
-        self.db = Path(self.temp.name) / "scada.sqlite3"
+        self.db = Path(self.temp.name) / "scada.db"
         self.store = ScadaStore(self.db)
         self.store.create_row("fes_rtu_define", {
             "rtu_id": 1, "channel_id": 1, "channel_type": "iec104",

@@ -35,7 +35,7 @@ class WebLogBrowserTests(unittest.TestCase):
                                    "23:02:00 [日志] 报文 TX IEC104 HEX=68 05\n", encoding="utf-8")
         self.servers = {}
         for module, factory in (("s", s_server), ("t", t_server)):
-            server = factory("127.0.0.1", 0, db_path=self.root / ("scdfe_s.sqlite3" if module == "s" else "scada.sqlite3"))
+            server = factory("127.0.0.1", 0, db_path=self.root / ("scdfe_s.db" if module == "s" else "scada.db"))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             self.addCleanup(lambda server=server, thread=thread:

@@ -15,7 +15,7 @@ class ProtocolPointMapTests(unittest.TestCase):
     def _store(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        store = ScadaStore(Path(directory.name) / "scada.sqlite3")
+        store = ScadaStore(Path(directory.name) / "scada.db")
         store.create_row("fes_rtu_define", {
             "rtu_id": 7, "channel_id": 70, "channel_type": "iec104",
             "process_enable": 0,

@@ -27,7 +27,7 @@ class ScdfeTPointRuntimeSchemaTests(unittest.TestCase):
             ]
             path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-            db = root / "old.sqlite3"
+            db = root / "old.db"
             old = ScadaStore(db, schema_dir=old_schema)
             old.create_row("fes_scdfe_t_define", {
                 "channel_id": 1, "name": "旧通道", "protocol": "modbus-tcp",

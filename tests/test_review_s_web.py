@@ -228,7 +228,7 @@ class AssetsParser(HTMLParser):
 class ReviewSWebTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.httpd = make_server("127.0.0.1", 0, db_path=Path(self.temp.name) / "test.sqlite3")
+        self.httpd = make_server("127.0.0.1", 0, db_path=Path(self.temp.name) / "test.db")
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
 

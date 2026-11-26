@@ -114,7 +114,7 @@ def test_compact_history_detail_and_channel_rebind_invalidation(tmp_path,compone
     import http.client,json,threading
     from importlib import import_module
     from core.command_store import DatabaseCommandWriter
-    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'api.sqlite3')
+    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'api.db')
     data=server.trans_store.store if component=='t' else server.store
     data.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='iec104',name='测试站'))
     data.create_row('fes_yk_define',dict(rtu_id=1,pnt_no=1,name='开关',value=0,status=0))

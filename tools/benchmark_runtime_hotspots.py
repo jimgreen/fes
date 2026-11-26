@@ -108,7 +108,7 @@ def main():
                     runtime._now_ms = clock
             if payloads["before"] != payloads["after"]:
                 raise AssertionError("acquisition messages differ")
-            store = ScadaStore(root / "scada.sqlite3")
+            store = ScadaStore(root / "scada.db")
             seed_protocol_test_data(store, replicas=1)
             rtu_id = runtimes["after"].discover_channels(store)[0].rtu_id
             signatures = {v: runtime.definition_signature(store, rtu_id)

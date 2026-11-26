@@ -96,7 +96,7 @@ def main():
         results.append(row); print(json.dumps({k:v for k,v in row.items() if k not in ('before','after')},ensure_ascii=False),flush=True)
 
     with tempfile.TemporaryDirectory(prefix='scada-round2-') as tmp:
-        con=database(Path(tmp)/'sources.sqlite3')
+        con=database(Path(tmp)/'sources.db')
         try:
             con.execute('BEGIN')
             con.executemany('INSERT INTO fes_yc_define VALUES(?,?,?,?,?)',
@@ -125,7 +125,7 @@ def main():
 
         timings=[]; native_reads=[]
         for variant,(service_cls,server_cls) in enumerate(((before_s,before_iec),(IEC104Service,IEC104Server))):
-            con=database(Path(tmp)/f'iec-{variant}.sqlite3')
+            con=database(Path(tmp)/f'iec-{variant}.db')
             con.execute('BEGIN'); con.executemany('INSERT INTO fes_yc_define VALUES(1,?,1,0,0)',[(n,) for n in range(1,4001)]); con.commit()
             native=server_cls(rtu_id=1,ip='127.0.0.1')
             for n in range(1,4001): native.add_point('yc',n,value=1)
@@ -142,7 +142,7 @@ def main():
         add('S IEC104: unchanged 4000 points after other RTU commit',*timings,native_point_reads=native_reads)
 
         def writer_fixture(variant,runtime,stack):
-            con=sqlite3.connect(Path(tmp)/f'writer-{variant}.sqlite3',isolation_level=None)
+            con=sqlite3.connect(Path(tmp)/f'writer-{variant}.db',isolation_level=None)
             stack.callback(con.close)
             con.execute('PRAGMA journal_mode=WAL'); con.execute('PRAGMA synchronous=NORMAL')
             con.execute('CREATE TABLE p(rtu_id INT,pnt_no INT,value REAL,_version INT DEFAULT 0,PRIMARY KEY(rtu_id,pnt_no))')
@@ -177,7 +177,7 @@ def main():
 
         timings=[]; outputs=[]; encodes=[]; active_timings=[]
         for variant,cls in enumerate((before_modbus,ModbusMappedServer)):
-            con=database(Path(tmp)/f'modbus-{variant}.sqlite3')
+            con=database(Path(tmp)/f'modbus-{variant}.db')
             con.execute('BEGIN'); con.executemany('INSERT INTO fes_yc_define VALUES(1,?,0,0,0)',[(n,) for n in range(1,1001)]); con.commit()
             with socket.socket() as port_socket:
                 port_socket.bind(('127.0.0.1',0)); port=port_socket.getsockname()[1]

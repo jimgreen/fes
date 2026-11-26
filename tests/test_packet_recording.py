@@ -24,8 +24,8 @@ class PacketRecordingTests(unittest.TestCase):
         temp=tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root=Path(temp.name)
-        self.store=ScadaStore(self.root/'db.sqlite3')
-        self.sim = SimulatorStore(self.root/'scdfe_s.sqlite3')
+        self.store=ScadaStore(self.root/'db.db')
+        self.sim = SimulatorStore(self.root/'scdfe_s.db')
         self.addCleanup(self.sim.close)
 
     def test_default_off_persistence_external_change_and_invalid_configuration(self):

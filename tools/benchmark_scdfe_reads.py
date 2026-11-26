@@ -18,7 +18,7 @@ from scdfe_t.web.service import TransStore
 
 
 def supervisor_cycle(root):
-    obj = ScdfeSupervisor(root / "c.sqlite3")
+    obj = ScdfeSupervisor(root / "c.db")
     opens = 0
     original = obj.store._open_connection
 
@@ -54,7 +54,7 @@ def supervisor_cycle(root):
 
 
 def web_reads(root):
-    with make_server(port=0, db_path=root / "s.sqlite3") as web:
+    with make_server(port=0, db_path=root / "s.db") as web:
         with web.store.connection() as db:
             db.execute("BEGIN")
             for i in range(1, 501):
@@ -139,7 +139,7 @@ def log_reads(root):
 
 
 def monitor_reads(root):
-    service = TransStore(root / "t.sqlite3", connection_pool_size=1)
+    service = TransStore(root / "t.db", connection_pool_size=1)
     try:
         with service.store.connection() as con:
             con.executemany(

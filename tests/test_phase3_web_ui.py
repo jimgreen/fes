@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class Phase3WebRegressionTests(unittest.TestCase):
     def test_trans_create_points_batch_allows_same_pnt_no_across_kinds_and_maps_conflict_to_409(self):
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_c.sqlite3"
+            db = Path(folder) / "scdfe_c.db"
             trans = TransStore(db)
             try:
                 trans.create_channel({
@@ -45,7 +45,7 @@ class Phase3WebRegressionTests(unittest.TestCase):
 
     def test_process_controller_snapshot_is_read_only_in_steady_state(self):
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_c.sqlite3"
+            db = Path(folder) / "scdfe_c.db"
             with closing(ScadaStore(db)) as store:
                 ctrl = ProcessController(store)
                 first = ctrl.snapshot()
@@ -61,7 +61,7 @@ class Phase3WebRegressionTests(unittest.TestCase):
 
     def test_shared_static_routes_return_etag_and_304_with_security_headers(self):
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_c.sqlite3"
+            db = Path(folder) / "scdfe_c.db"
             server = make_t_server("127.0.0.1", 0, db_path=db, workspace_root=Path(folder))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -91,7 +91,7 @@ class Phase3WebRegressionTests(unittest.TestCase):
 
     def test_scdfe_t_write_request_emits_operation_audit_log_and_security_headers(self):
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_c.sqlite3"
+            db = Path(folder) / "scdfe_c.db"
             server = make_t_server("127.0.0.1", 0, db_path=db, workspace_root=Path(folder))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
@@ -137,13 +137,19 @@ class Phase3WebRegressionTests(unittest.TestCase):
         i18n_js = (ROOT / "core" / "web_static" / "ui-i18n.js").read_text(encoding="utf-8")
         for theme_id in (
             "minimalist-light",
+            "arctic-frost",
+            "warm-paper",
+            "slate-daylight",
+            "bento-grid",
+            "editorial",
             "precision-dark",
+            "ocean-slate",
+            "nord-dark",
+            "industrial-amber",
+            "glassmorphism",
             "sci-fi-cyan",
             "sci-fi-purple",
             "sci-fi-matrix",
-            "bento-grid",
-            "glassmorphism",
-            "editorial",
         ):
             self.assertIn(f'[data-theme="{theme_id}"]', theme_css)
             self.assertIn(f'"{theme_id}"', i18n_js)
@@ -162,7 +168,7 @@ class Phase3WebRegressionTests(unittest.TestCase):
         self.assertNotIn("https://", i18n_js)
 
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_c.sqlite3"
+            db = Path(folder) / "scdfe_c.db"
             server = make_c_server("127.0.0.1", 0, db_path=db, workspace_root=Path(folder))
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()

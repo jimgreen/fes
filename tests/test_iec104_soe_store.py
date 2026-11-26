@@ -14,7 +14,7 @@ class EventStoreTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
 
     def store(self, cls=SimulatorStore):
-        store = cls(Path(self.tmp.name) / ('s.sqlite3' if cls is SimulatorStore else 'c.sqlite3'))
+        store = cls(Path(self.tmp.name) / ('s.db' if cls is SimulatorStore else 'c.db'))
         self.addCleanup(store.close)
         fill_one(store, 2404)
         return store

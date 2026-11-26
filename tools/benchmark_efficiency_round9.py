@@ -32,7 +32,7 @@ def main():
 
     result = dict(root=str(args.root.resolve()), rtus=16, points_per_rtu=1000, rounds=40)
     with tempfile.TemporaryDirectory(prefix='scada-round9-') as directory:
-        store = ScadaStore(Path(directory)/'bench.sqlite3')
+        store = ScadaStore(Path(directory)/'bench.db')
         with store.connection() as con:
             con.execute('BEGIN')
             con.executemany('INSERT INTO fes_rtu_define(rtu_id,channel_type,channel_id) VALUES(?, ?, ?)',
@@ -74,7 +74,7 @@ def main():
                           dense_read=summary(dense), dense_write=summary(dense_writes))
         store.close()
         # Time queue-to-commit separately from the large-store startup/migration.
-        store = ScadaStore(Path(directory)/'writer.sqlite3')
+        store = ScadaStore(Path(directory)/'writer.db')
         store.create_row('fes_rtu_define', dict(rtu_id=1, channel_type='iec104', channel_id=1))
         store.create_row('fes_yc_define', dict(rtu_id=1, pnt_no=1, value=0))
         queue, ready = Queue(), threading.Event()

@@ -12,7 +12,7 @@ from tools.remove_main_restart_fields import migrate
 class RemoveMainRestartFieldsTests(unittest.TestCase):
     def test_migration_removes_all_restart_fields(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "scada.sqlite3"
+            db = Path(directory) / "scada.db"
             store = ScadaStore(db)
             del store
             gc.collect()

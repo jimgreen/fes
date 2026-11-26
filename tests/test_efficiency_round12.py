@@ -9,7 +9,7 @@ from scdfe_c.web.service import ScadaStore
 
 @pytest.fixture
 def store(tmp_path):
-    data=ScadaStore(tmp_path/'business.sqlite3')
+    data=ScadaStore(tmp_path/'business.db')
     for rid in (1,2):
         data.create_row('fes_rtu_define',dict(rtu_id=rid,channel_id=rid,channel_type='iec104',name=f'站{rid}'))
         for kind in ('yc','yx','yk','yt'):
@@ -133,7 +133,7 @@ def test_command_sql_transitions_are_full_sync_and_restore_normal(tmp_path,monke
                 calls.append(sqlite3.Connection.execute(self,'PRAGMA synchronous').fetchone()[0])
             return super().execute(sql,*args,**kwargs)
     monkeypatch.setattr(sqlite3,'connect',lambda *a,**kw:original(*a,**dict(kw,factory=Observed)))
-    data=ScadaStore(tmp_path/'durable.sqlite3')
+    data=ScadaStore(tmp_path/'durable.db')
     try:
         data.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='iec104'))
         data.create_row('fes_yk_define',dict(rtu_id=1,pnt_no=1,value=0))
@@ -199,7 +199,7 @@ def test_history_conditional_query_names_and_review_api(tmp_path,component):
     import http.client,json,threading
     from importlib import import_module
     from core.command_store import DatabaseCommandWriter
-    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'api.sqlite3')
+    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'api.db')
     data=server.trans_store.store if component=='t' else server.store
     data.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='iec104',name='真实站名'))
     for kind in ('yk','yx'):data.create_row(f'fes_{kind}_define',dict(rtu_id=1,pnt_no=1,name='开关点',value=0,status=0))
@@ -259,7 +259,7 @@ def test_writer_lock_conflict_preserves_batch_and_reports_wait(store,monkeypatch
 
 def test_round11_schema_migration_keeps_existing_command(tmp_path):
     from core.command_trace import ensure_schema
-    con=sqlite3.connect(tmp_path/'migration.sqlite3');con.row_factory=sqlite3.Row
+    con=sqlite3.connect(tmp_path/'migration.db');con.row_factory=sqlite3.Row
     try:
         for table in ('fes_rtu_define','fes_yk_define','fes_yt_define','fes_yc_define','fes_yx_define'):
             con.execute(f'CREATE TABLE {table}(rtu_id INT,pnt_no INT,name TEXT,value REAL,cmd_time INT,cmd_handle_time INT)')

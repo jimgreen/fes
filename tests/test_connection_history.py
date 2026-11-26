@@ -38,7 +38,7 @@ class ConnectionHistoryTests(unittest.TestCase):
     def _make_history(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        db = Path(tmp.name) / 'scada.sqlite3'
+        db = Path(tmp.name) / 'scada.db'
         writer = ConnectionJournal(history_path(db, 's'))
         self.addCleanup(writer.close)
         return db, writer
@@ -125,7 +125,7 @@ class ConnectionHistoryTests(unittest.TestCase):
         from core.connection_history import journal, release_journal
 
         with tempfile.TemporaryDirectory() as tmp:
-            db = Path(tmp) / 'db.sqlite3'
+            db = Path(tmp) / 'db.db'
             first = journal(db, 's')
             second = journal(db, 's')
             self.assertIs(first, second)
@@ -167,7 +167,7 @@ class ConnectionHistoryTests(unittest.TestCase):
                 else:
                     from scdfe_t.web.server import make_server
                 with tempfile.TemporaryDirectory() as tmp:
-                    db = Path(tmp) / 'data.sqlite3'
+                    db = Path(tmp) / 'data.db'
                     server = make_server('127.0.0.1', 0, db_path=db)
                     store = server.store if component == 's' else server.trans_store.store
                     table = 'fes_rtu_define' if component == 's' else 'fes_scdfe_t_define'
@@ -230,7 +230,7 @@ class ConnectionHistoryTests(unittest.TestCase):
         from core.web_connections import connection_options, attach_connection_names
 
         with tempfile.TemporaryDirectory() as tmp:
-            db = Path(tmp) / 'data.sqlite3'
+            db = Path(tmp) / 'data.db'
             store = ScadaStore(db)
             writer = ConnectionJournal(history_path(db, 's'))
             try:

@@ -152,8 +152,8 @@ def pipeline(channels,points,rounds,output,*,rtu=False):
         stack.callback(save_command_diagnostics)
         stack.callback(lambda: shutil.copytree(root/'logs',output/f'logs-{label}',dirs_exist_ok=True)
                        if (root/'logs').exists() else None)
-        s=SimulatorStore(root/'scdfe_s.sqlite3',connection_pool_size=2)
-        c=ScadaStore(root/'scada.sqlite3',connection_pool_size=2)
+        s=SimulatorStore(root/'scdfe_s.db',connection_pool_size=2)
+        c=ScadaStore(root/'scada.db',connection_pool_size=2)
         stack.callback(s.close); stack.callback(c.close)
         s_ports=[port() for _ in range(channels)]; t_ports=[port() for _ in range(channels)]
         serial=f'socket://127.0.0.1:{s_ports[0]}' if rtu else None

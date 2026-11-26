@@ -15,9 +15,9 @@ class WebKeepAliveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             servers = [
-                make_c_server("127.0.0.1", 0, db_path=root / "c.sqlite3"),
-                make_s_server("127.0.0.1", 0, db_path=root / "s.sqlite3"),
-                make_t_server("127.0.0.1", 0, db_path=root / "c.sqlite3"),
+                make_c_server("127.0.0.1", 0, db_path=root / "c.db"),
+                make_s_server("127.0.0.1", 0, db_path=root / "s.db"),
+                make_t_server("127.0.0.1", 0, db_path=root / "c.db"),
             ]
             threads = []
             try:

@@ -17,7 +17,7 @@ class PointNameFilterTests(unittest.TestCase):
     def test_all_roles_filter_names_before_pagination(self):
         for role, factory in (("s", make_s), ("c", make_c), ("t", make_t)):
             with self.subTest(role=role), tempfile.TemporaryDirectory() as directory:
-                database = Path(directory) / "points.sqlite3"
+                database = Path(directory) / "points.db"
                 if role == "t":
                     service = TransStore(database)
                     for cid in (1, 2):

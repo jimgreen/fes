@@ -26,7 +26,7 @@ def running_server(factory, root=None):
     workspace = tempfile.TemporaryDirectory() if root is None else nullcontext(root)
     with workspace as directory:
         root = Path(directory)
-        server = factory("127.0.0.1", 0, db_path=root / "trend.sqlite3", workspace_root=root)
+        server = factory("127.0.0.1", 0, db_path=root / "trend.db", workspace_root=root)
         worker = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
         worker.start()
         try:

@@ -128,7 +128,7 @@ def main() -> None:
     legacy_db_elapsed = db_elapsed = 0.0
     if args.db_cycles:
         with tempfile.TemporaryDirectory() as database_dir:
-            store = ScadaStore(Path(database_dir) / "scada.sqlite3")
+            store = ScadaStore(Path(database_dir) / "scada.db")
             _bulk_create(store, "fes_rtu_define", [{
                 "rtu_id": 1, "channel_id": 1, "channel_type": "custom",
             }])
@@ -183,7 +183,7 @@ def main() -> None:
             db_elapsed = time.perf_counter() - started
             persistent_connection.close()
     with tempfile.TemporaryDirectory() as command_dir:
-        command_store = ScadaStore(Path(command_dir) / "scada.sqlite3")
+        command_store = ScadaStore(Path(command_dir) / "scada.db")
         _bulk_create(command_store, "fes_rtu_define", [{
             "rtu_id": 1, "channel_id": 1, "channel_type": "custom",
         }])
@@ -212,7 +212,7 @@ def main() -> None:
         command_elapsed = time.perf_counter() - started
         command_worker._close_command_connection()
     with tempfile.TemporaryDirectory() as definition_dir:
-        definition_store = ScadaStore(Path(definition_dir) / "scada.sqlite3")
+        definition_store = ScadaStore(Path(definition_dir) / "scada.db")
         _bulk_create(definition_store, "fes_rtu_define", [{
             "rtu_id": 1, "channel_id": 1, "channel_type": "custom",
         }])

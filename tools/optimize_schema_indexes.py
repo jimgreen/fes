@@ -26,7 +26,7 @@ from core.rtdb_schema import sync_embedded_schema  # noqa: E402
 from scdfe_c.web.service import SchemaCatalog  # noqa: E402
 
 
-DEFAULT_DB = ROOT / "db" / "scada.sqlite3"
+DEFAULT_DB = ROOT / "db" / "scada.db"
 SCHEMA = ROOT / "dbdef" / "json" / "fes_ytyk_message.json"
 
 # These names were left by older schema revisions.  The current table-level

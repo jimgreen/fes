@@ -42,7 +42,7 @@ class TransmissionReviewTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.db = Path(self.temp.name) / "trans.sqlite3"
+        self.db = Path(self.temp.name) / "trans.db"
         self.store = ScadaStore(self.db)
         self.port = free_port()
         self.store.create_row("fes_scdfe_t_define", {

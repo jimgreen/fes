@@ -275,8 +275,8 @@ def fill_one(store,listen):
 def database_boundaries(directory):
     with ExitStack() as stack:
         root=Path(directory)
-        s=SimulatorStore(root/'scdfe_s.sqlite3');stack.callback(s.close)
-        c=ScadaStore(root/'scada.sqlite3');stack.callback(c.close)
+        s=SimulatorStore(root/'scdfe_s.db');stack.callback(s.close)
+        c=ScadaStore(root/'scada.db');stack.callback(c.close)
         listen=port();fill_one(s,listen);fill_one(c,listen)
         service=IEC104Service(s,config_path=root/'s.json');stack.callback(service.close)
         service.configure(dict(rtu_id=1,port=listen));service.start()

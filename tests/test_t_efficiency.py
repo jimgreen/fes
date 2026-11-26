@@ -48,7 +48,7 @@ class TransmissionEfficiencyTests(unittest.TestCase):
     def test_log_tail_preserves_utf8_end_and_small_file_exact_total(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            s = TransStore(root / "db.sqlite3")
+            s = TransStore(root / "db.db")
             self.addCleanup(s.store.close)
             name = "scdfe_t-channel-1-20261106-10.log"
             file = root / "logs" / name

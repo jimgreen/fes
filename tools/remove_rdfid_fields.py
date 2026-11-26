@@ -26,7 +26,7 @@ from scdfe_c.web.service import DEFAULT_DB, SCHEMA_DIR, SchemaCatalog, ScadaStor
 from scdfe_s.database import SimulatorStore
 
 
-DEFAULT_S_DB = DEFAULT_DB.with_name("scdfe_s.sqlite3")
+DEFAULT_S_DB = DEFAULT_DB.with_name("scdfe_s.db")
 
 
 def _fingerprint(payload: dict) -> str:

@@ -7,7 +7,7 @@ from scdfe_c.web.service import ScadaStore
 class CommandServerSchemaTests(unittest.TestCase):
     def test_command_server_schema_and_singleton_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db=Path(tmp)/'scada.sqlite3'
+            db=Path(tmp)/'scada.db'
             store=ScadaStore(db)
             schema=store.catalog.public('fes_scdfe_command_define')
             self.assertEqual(schema['primary_keys'], ['id'])

@@ -41,7 +41,7 @@ class Phase4EngineeringTests(unittest.TestCase):
 
     def test_validate_database_collects_multiple_errors_and_reports_user_version(self):
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / "scdfe_c.sqlite3"
+            db = Path(folder) / "scdfe_c.db"
             with closing(ScadaStore(db)) as store:
                 # 新初始化库应自动写入 SCHEMA_USER_VERSION
                 ok = validate_database(db, "c", store.catalog)

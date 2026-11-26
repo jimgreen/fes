@@ -73,7 +73,7 @@ class IEC104AcceptanceTests(unittest.TestCase):
 
     def test_schema_exposes_transport_and_time_tag_fields(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "schema.sqlite3")
+            store = ScadaStore(Path(directory) / "schema.db")
             try:
                 channel = {c["eng_name"] for c in store.schema("fes_channel_iec104_define")["columns"]}
                 point = {c["eng_name"] for c in store.schema("fes_channel_iec104_point_define")["columns"]}
@@ -224,7 +224,7 @@ class IEC104AcceptanceTests(unittest.TestCase):
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 payload["columns"] = [c for c in payload["columns"] if c["eng_name"] not in columns]
                 path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            db = root / "old.sqlite3"
+            db = root / "old.db"
             store = ScadaStore(db, schema_dir=old_schema)
             store.close()
             result = migrate(db, Path("dbdef/json"), apply=True)

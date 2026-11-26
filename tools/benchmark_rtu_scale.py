@@ -218,7 +218,7 @@ def run_scale(replicas, args, repeat, variant, runtime_path, runtime_hash):
     runtime = load_runtime(runtime_path, runtime_hash)
     with tempfile.TemporaryDirectory(prefix="scada-rtu-scale-") as temp:
         root = Path(temp)
-        store = ScadaStore(root / "scada.sqlite3")
+        store = ScadaStore(root / "scada.db")
         seeded = seed_protocol_test_data(store, replicas=replicas)
         specs = runtime.discover_channels(store)
         if len(specs) != 6 * replicas:

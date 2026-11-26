@@ -15,7 +15,7 @@ from server.iec104_server import IEC104Server
 class MappingBatchTests(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
-        self.service=TransStore(Path(tmp.name)/'scada.sqlite3',connection_pool_size=1)
+        self.service=TransStore(Path(tmp.name)/'scada.db',connection_pool_size=1)
         self.addCleanup(self.service.store.close)
         self.service.create_channel(dict(channel_id=1,protocol='iec104',bind_host='127.0.0.1',bind_port=25441))
         self.sql=[]

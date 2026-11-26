@@ -12,7 +12,7 @@ from scdfe_c.web.service import ScadaStore
 class DefinitionVersionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.store = ScadaStore(Path(self.temp.name) / "scada.sqlite3")
+        self.store = ScadaStore(Path(self.temp.name) / "scada.db")
         self.store.create_row("fes_rtu_define", {
             "rtu_id": 7, "channel_id": 70, "channel_type": "modbus-tcp", "name": "站 7",
         })

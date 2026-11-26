@@ -24,7 +24,7 @@ from scdfe_c.web.process_control import runtime_python
 class WebTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.db = Path(self.temp.name) / 'scada.sqlite3'
+        self.db = Path(self.temp.name) / 'scada.db'
         self.server = make_server('127.0.0.1', 0, db_path=self.db)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -274,8 +274,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.call('/api/rtus', 'POST', {
             'rtu_id': 1, 'channel_id': 1, 'channel_type': 'custom',
         }, {'Origin': self.url})[0], 201)
-        self.assertEqual(self.call('/static/../../db/scada.sqlite3')[0], 404)
-        self.assertEqual(self.call('/db/scada.sqlite3')[0], 404)
+        self.assertEqual(self.call('/static/../../db/scada.db')[0], 404)
+        self.assertEqual(self.call('/db/scada.db')[0], 404)
 
     def test_scope_cannot_be_overridden_and_null_can_clear(self):
         self.rtu(1)

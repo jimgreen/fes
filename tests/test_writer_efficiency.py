@@ -19,7 +19,7 @@ class WriterEfficiencyTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory(prefix="scada-writer-test-")
         self.addCleanup(tmp.cleanup)
-        self.connection = sqlite3.connect(Path(tmp.name) / "test.sqlite3")
+        self.connection = sqlite3.connect(Path(tmp.name) / "test.db")
         self.addCleanup(self.connection.close)
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("CREATE TABLE points (rtu_id INTEGER, pnt_no INTEGER, "

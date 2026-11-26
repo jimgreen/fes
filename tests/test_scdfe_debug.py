@@ -48,7 +48,7 @@ class DebugTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.store = ScadaStore(self.root / "scada.sqlite3")
+        self.store = ScadaStore(self.root / "scada.db")
         ensure_control_row(self.store)
         for rtu, channel in ((7, 70), (8, 80)):
             self.store.create_row("fes_rtu_define", {
@@ -273,7 +273,7 @@ class DebugTests(unittest.TestCase):
             with self.subTest(args=args), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as exc:
                 runtime.main(["--db", str(self.store.db_path), *args])
             self.assertEqual(exc.exception.code, 2)
-        missing = self.root / "missing.sqlite3"
+        missing = self.root / "missing.db"
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             runtime.main(["--db", str(missing), "--rtu-id", "7"])
         self.assertFalse(missing.exists())

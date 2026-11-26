@@ -131,7 +131,7 @@ class BusinessRuntimeTests(unittest.TestCase):
         from server.modbus_mapped_server import ModbusMappedServer
         with ExitStack() as stack:
             root=Path(stack.enter_context(tempfile.TemporaryDirectory()))
-            store=ScadaStore(root/'db.sqlite3');stack.callback(store.close)
+            store=ScadaStore(root/'db.db');stack.callback(store.close)
             store.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='modbus-tcp'))
             for kind in ('yc','yt'):store.create_row(f'fes_{kind}_define',dict(rtu_id=1,pnt_no=1,value=10))
             server=ModbusMappedServer(store=store,rtu_id=1,port=free_port(),points=[
@@ -155,7 +155,7 @@ class BusinessRuntimeTests(unittest.TestCase):
         from tools.verify_iec104_soe import fill_one
         with ExitStack() as stack:
             root=Path(stack.enter_context(tempfile.TemporaryDirectory()))
-            store=SimulatorStore(root/'s.sqlite3');stack.callback(store.close);fill_one(store,2404)
+            store=SimulatorStore(root/'s.db');stack.callback(store.close);fill_one(store,2404)
             store.update_row('fes_yx_define',[1,1],dict(value=1))
             events=[]
             forwarder=SoeForwarder(store,'business-test','S',lambda row:[row],rtu_id=1,
@@ -182,7 +182,7 @@ class BusinessRuntimeTests(unittest.TestCase):
         from scdfe_c.web.service import ScadaStore
         with ExitStack() as stack:
             root = Path(stack.enter_context(tempfile.TemporaryDirectory()))
-            store = ScadaStore(root/'db.sqlite3'); stack.callback(store.close)
+            store = ScadaStore(root/'db.db'); stack.callback(store.close)
             store.create_row('fes_rtu_define', dict(rtu_id=1, channel_id=1, channel_type='modbus-tcp'))
             store.create_row('fes_yc_define', dict(rtu_id=1,pnt_no=1,value=0))
             queue = CaptureWriterQueue()
@@ -282,7 +282,7 @@ class BusinessRuntimeTests(unittest.TestCase):
         from scdfe_s.web.iec104_service import IEC104Service
         with ExitStack() as stack:
             root = Path(stack.enter_context(tempfile.TemporaryDirectory()))
-            store = ScadaStore(root/'scdfe_s.sqlite3'); stack.callback(store.close)
+            store = ScadaStore(root/'scdfe_s.db'); stack.callback(store.close)
             store.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='iec104',packet_recording=0))
             store.create_row('fes_channel_iec104_define',dict(id=1,channel_id=1,rtu_addr=1))
             for kind,value in [('yc',12.5),('yx',0),('yk',0),('yt',0)]:

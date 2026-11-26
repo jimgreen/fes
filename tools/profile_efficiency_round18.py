@@ -15,7 +15,7 @@ def main():
     args=p.parse_args();sys.path.insert(0,str(args.root.resolve()))
     from scdfe_s.web.server import make_server,ScadaHandler
     with tempfile.TemporaryDirectory(prefix='scada-profile18-') as directory:
-        server=make_server('127.0.0.1',0,db_path=Path(directory)/'s.sqlite3')
+        server=make_server('127.0.0.1',0,db_path=Path(directory)/'s.db')
         try:
             with server.store.connection() as con:
                 con.executemany('INSERT INTO fes_rtu_define(rtu_id,channel_id,channel_type) VALUES(?,?,?)',

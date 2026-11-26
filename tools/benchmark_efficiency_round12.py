@@ -28,7 +28,7 @@ def main():
     from core.command_trace import claim,advance
     result=dict(root=str(args.root.resolve()),scope='temporary SQLite WAL and localhost HTTP; no equipment I/O; warm reads',history_rows=5000)
     with tempfile.TemporaryDirectory(prefix='scada-round12-') as directory:
-        server=make_server('127.0.0.1',0,db_path=Path(directory)/'bench.sqlite3');store=server.store
+        server=make_server('127.0.0.1',0,db_path=Path(directory)/'bench.db');store=server.store
         store.create_row('fes_rtu_define',dict(rtu_id=1,channel_type='iec104',channel_id=1,name='测试站'))
         store.create_row('fes_yk_define',dict(rtu_id=1,pnt_no=1,name='测试开关',value=0,status=0))
         with store.connection() as con:

@@ -16,7 +16,7 @@ class SimplifySchemaTests(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.db=Path(tmp.name)/'schema.sqlite3'
+        self.db=Path(tmp.name)/'schema.db'
         self.store=ScadaStore(self.db)
         self.store.create_row('fes_rtu_define',{'rtu_id':8,'channel_id':80,'channel_type':'iec104'})
         self.store.create_row('fes_yc_define',{'rtu_id':8,'pnt_no':1,'name':'温度','value':12.5,'status':128})

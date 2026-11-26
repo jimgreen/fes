@@ -13,7 +13,7 @@ class RemoveDeviceValuesTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.db = Path(self.temp.name) / 'scada.sqlite3'
+        self.db = Path(self.temp.name) / 'scada.db'
         self.store = ScadaStore(self.db)
         self.store.create_row('fes_rtu_define', {'rtu_id': 7, 'channel_id': 70,
                                                'channel_type': 'iec104', 'name': 'TEST_IEC104_RTU'})

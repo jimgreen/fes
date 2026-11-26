@@ -20,7 +20,7 @@ class WorkspaceRootTests(unittest.TestCase):
 
     @contextmanager
     def server(self, factory, root):
-        database = root / 'realtime' / 'qinling' / 'first.sqlite3'
+        database = root / 'realtime' / 'qinling' / 'first.db'
         database.parent.mkdir(parents=True, exist_ok=True)
         server = factory('127.0.0.1', 0, db_path=database, workspace_root=root,
                          selection_path=root / 'selection.json')
@@ -40,7 +40,7 @@ class WorkspaceRootTests(unittest.TestCase):
                 with self.server(factory, root) as server:
                     status, info = self.request(server, 'GET', '/api/database')
                     self.assertEqual(status, 200)
-                    self.assertEqual(info['database'], 'realtime/qinling/first.sqlite3')
+                    self.assertEqual(info['database'], 'realtime/qinling/first.db')
                     self.assertEqual(info['relative_database'], info['database'])
                     self.assertEqual(info['workspace_root'], str(root.resolve()))
                     _, tree = self.request(server, 'GET', '/api/database/tree?directory=.')
@@ -53,12 +53,12 @@ class WorkspaceRootTests(unittest.TestCase):
                                               {'directory': '.', 'name': 'simulation'})
                     self.assertEqual(created['path'], 'simulation')
                     status, created = self.request(server, 'POST', '/api/database/create',
-                        {'directory': 'simulation', 'name': '中文 空格.sqlite3'})
+                        {'directory': 'simulation', 'name': '中文 空格.db'})
                     self.assertEqual(status, 201, created)
                     status, switched = self.request(server, 'POST', '/api/database',
                         {'database': created['path'], 'expected_database': info['database']})
                     self.assertEqual(status, 200, switched)
-                    self.assertEqual(switched['database'], 'simulation/中文 空格.sqlite3')
+                    self.assertEqual(switched['database'], 'simulation/中文 空格.db')
                     self.assertEqual(selected_database(root / 'selection.json', None, None,
                         workspace_root=root), (root / switched['database']).resolve())
 
@@ -78,7 +78,7 @@ class WorkspaceRootTests(unittest.TestCase):
                         for endpoint in ('tree?directory=', 'validate?path='):
                             status, error = self.request(server, 'GET', '/api/database/' + endpoint + quote(bad, safe=''))
                             self.assertEqual(status, 400, (bad, error))
-                        for endpoint, name in [('mkdir', 'leak'), ('create', 'leak.sqlite3')]:
+                        for endpoint, name in [('mkdir', 'leak'), ('create', 'leak.db')]:
                             status, error = self.request(server, 'POST', '/api/database/' + endpoint,
                                                         {'directory': bad, 'name': name})
                             self.assertEqual(status, 400, (bad, error))
@@ -107,8 +107,8 @@ class WorkspaceRootTests(unittest.TestCase):
                     self.assertNotIn('escape', [row['name'] for row in tree['entries']])
                     self.assertEqual(self.request(server, 'GET', '/api/database/tree?directory=escape')[0], 400)
                     self.assertEqual(self.request(server, 'POST', '/api/database/create',
-                        {'directory': 'escape', 'name': 'leak.sqlite3'})[0], 400)
-                    self.assertFalse((outside / 'leak.sqlite3').exists())
+                        {'directory': 'escape', 'name': 'leak.db'})[0], 400)
+                    self.assertFalse((outside / 'leak.db').exists())
             finally:
                 if os.name == 'nt':
                     link.rmdir()
@@ -118,7 +118,7 @@ class WorkspaceRootTests(unittest.TestCase):
     def test_startup_rejects_outside_database_before_creating_it(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / 'workspace'; root.mkdir()
-            outside = Path(folder) / 'outside.sqlite3'
+            outside = Path(folder) / 'outside.db'
             with self.assertRaises(ValueError):
                 make_c('127.0.0.1', 0, db_path=outside, workspace_root=root)
             self.assertFalse(outside.exists())
@@ -126,12 +126,12 @@ class WorkspaceRootTests(unittest.TestCase):
     def test_remembered_legacy_path_is_contained(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / 'workspace'; root.mkdir()
-            database = root / 'first.sqlite3'; database.touch()
+            database = root / 'first.db'; database.touch()
             preference = Path(folder) / 'selection.json'
-            preference.write_text(json.dumps({'database': 'workspace/first.sqlite3',
+            preference.write_text(json.dumps({'database': 'workspace/first.db',
                                               'base_directory': folder}), encoding='utf-8')
             self.assertEqual(selected_database(preference, None, None, workspace_root=root), database)
-            outside = Path(folder) / 'outside.sqlite3'; outside.touch()
+            outside = Path(folder) / 'outside.db'; outside.touch()
             preference.write_text(json.dumps({'database': str(outside)}), encoding='utf-8')
             with self.assertRaises(ValueError):
                 selected_database(preference, None, None, workspace_root=root)

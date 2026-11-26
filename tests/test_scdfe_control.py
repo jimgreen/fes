@@ -37,7 +37,7 @@ class ScdfeControlTests(unittest.TestCase):
         self.assertEqual(BATCH_WRITER_INTERVAL, 0.1)
         self.assertEqual(BATCH_WRITER_WAL_AUTOCHECKPOINT, 10000)
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "scada.sqlite3")
+            store = ScadaStore(Path(directory) / "scada.db")
             row = ensure_control_row(store)
             self.assertEqual((row["id"], row["process_enable"], row["process_status"]), (1, 1, 0))
             self.assertEqual(store.get_row(CONTROL_TABLE, [1])["log_dir"], "logs")
@@ -50,7 +50,7 @@ class ScdfeControlTests(unittest.TestCase):
 
     def test_schema_mismatch_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "stale.sqlite3"
+            path = Path(directory) / "stale.db"
             connection = sqlite3.connect(path)
             try:
                 connection.execute(
@@ -96,7 +96,7 @@ class ScdfeControlTests(unittest.TestCase):
 
     def test_main_process_enable_zero_requests_cooperative_exit(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "scada.sqlite3")
+            store = ScadaStore(Path(directory) / "scada.db")
             supervisor = ScdfeSupervisor(store.db_path, schema_dir=store.catalog.directory,
                                          log_dir=Path(directory) / "logs", scan_interval=0.1)
             try:
@@ -128,7 +128,7 @@ class ScdfeControlTests(unittest.TestCase):
                 return True
 
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "scada.sqlite3")
+            store = ScadaStore(Path(directory) / "scada.db")
             supervisor = ScdfeSupervisor(store.db_path, schema_dir=store.catalog.directory,
                                          log_dir=Path(directory) / "logs")
             supervisor._writer_queue = Queue()
@@ -150,7 +150,7 @@ class ScdfeControlTests(unittest.TestCase):
                 return False
 
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "scada.sqlite3")
+            store = ScadaStore(Path(directory) / "scada.db")
             supervisor = ScdfeSupervisor(store.db_path, schema_dir=store.catalog.directory,
                                          log_dir=Path(directory) / "logs")
             supervisor._writer_queue = Queue()
@@ -164,7 +164,7 @@ class ScdfeControlTests(unittest.TestCase):
 
     def test_instance_lock_is_os_released_and_reusable(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "scada.sqlite3"
+            path = Path(directory) / "scada.db"
             first = InstanceLock(path)
             self.assertFalse(InstanceLock.held(path))
             self.assertFalse(first.path.exists(), "probing an idle channel must not create its lock")
@@ -179,7 +179,7 @@ class ScdfeControlTests(unittest.TestCase):
 
     def test_failed_supervisor_scan_closes_connection_and_sees_external_commit(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "scada.sqlite3"
+            db = Path(directory) / "scada.db"
             supervisor = ScdfeSupervisor(db)
             used = []
             def scan():
@@ -203,7 +203,7 @@ class ScdfeControlTests(unittest.TestCase):
     def test_dedicated_batch_writer_commits_updates_and_flushes_on_stop(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            store = ScadaStore(root / "scada.sqlite3")
+            store = ScadaStore(root / "scada.db")
             store.create_row("fes_rtu_define", {
                 "rtu_id": 7, "channel_id": 70, "channel_type": "custom",
             })
@@ -250,7 +250,7 @@ class ScdfeControlTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            store = ScadaStore(root / "scada.sqlite3")
+            store = ScadaStore(root / "scada.db")
             store.create_row("fes_rtu_define", {
                 "rtu_id": 7, "channel_id": 70, "channel_type": "custom",
             })
@@ -289,7 +289,7 @@ class ScdfeControlTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            store = ScadaStore(root / "scada.sqlite3")
+            store = ScadaStore(root / "scada.db")
             store.create_row("fes_rtu_define", {
                 "rtu_id": 7, "channel_id": 70, "channel_type": "custom",
             })
@@ -319,7 +319,7 @@ class ScdfeControlTests(unittest.TestCase):
     def test_batch_writer_failure_exits_after_acknowledging_failed_batch(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            store = ScadaStore(root / "scada.sqlite3")
+            store = ScadaStore(root / "scada.db")
             store.create_row("fes_rtu_define", {
                 "rtu_id": 7, "channel_id": 70, "channel_type": "custom",
             })
@@ -350,7 +350,7 @@ class BatchWriterTransactionTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
-        self.store = ScadaStore(root / "scada.sqlite3")
+        self.store = ScadaStore(root / "scada.db")
         self.logger = ScdfeLogger(root / "logs", process_name="scdfe_c-db-writer")
         for rtu_id in (7, 8):
             self.store.create_row("fes_rtu_define", {

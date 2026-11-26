@@ -120,7 +120,7 @@ def main():
         parser.error("repeat and rounds must be positive")
     results = []
     with tempfile.TemporaryDirectory(prefix="scada-database-web-") as folder:
-        store = ScadaStore(Path(folder) / "fixture.sqlite3")
+        store = ScadaStore(Path(folder) / "fixture.db")
         seed_protocol_test_data(store, replicas=10)
         cases = {
             "overview_all": lambda: store.overview(),

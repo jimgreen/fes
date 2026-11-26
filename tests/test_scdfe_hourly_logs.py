@@ -54,7 +54,7 @@ class HourlyLogTests(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         self.logs = self.root / "logs"
-        self.store = ScadaStore(self.root / "scada.sqlite3")
+        self.store = ScadaStore(self.root / "scada.db")
         self.clock = Clock()
 
     def content(self, process, hour):

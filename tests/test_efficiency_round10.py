@@ -13,7 +13,7 @@ from scdfe_c.web.service import ScadaStore
 
 @pytest.fixture
 def store(tmp_path):
-    store = ScadaStore(tmp_path/'data.sqlite3')
+    store = ScadaStore(tmp_path/'data.db')
     for rid in (1, 2):
         store.create_row('fes_rtu_define', dict(rtu_id=rid, channel_id=rid, channel_type='iec104'))
         for no in range(1, 4):
@@ -163,7 +163,7 @@ def test_t_preflight_rejects_occupied_listener_before_spawn(store):
 def test_diagnostics_http_is_read_only_and_serves_timing_snapshot(tmp_path,component):
     from importlib import import_module
     from core.runtime_status import RuntimeStatusStore
-    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'api.sqlite3')
+    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'api.db')
     store=server.trans_store.store if component=='t' else server.store
     RuntimeStatusStore(store,'scdfe_'+component).upsert(7,dict(channel_name='测试站',running=1,
         diagnostic_json={'latency':{'read_ms':{'count':1,'window_count':1,'last_ms':2,'p50_ms':2,'p95_ms':2,'p99_ms':2}}}))

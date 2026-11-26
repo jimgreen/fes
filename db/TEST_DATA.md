@@ -17,7 +17,7 @@
 
 ```powershell
 Set-Location D:\codex\scada
-.\.venv\Scripts\python.exe -m web.seed_protocol_test_data --db D:\codex\scada\db\scada.sqlite3 --replicas 10
+.\.venv\Scripts\python.exe -m web.seed_protocol_test_data --db D:\codex\scada\db\scada.db --replicas 10
 ```
 
 `--replicas` 表示每种协议的目标站数，默认 10。指定较小值只补齐相应目标站，不删除既有站。`--replicas 1` 可在空临时数据库生成原规模的 6 个站。新 RTU 从当前最大 RTU ID 和 channel_id 后分配；用稳定 `code`（原站代码加 `_R02`…`_R10`）复用已有行。参数、四遥和 Modbus 映射代码也携带副本编号。

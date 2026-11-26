@@ -21,7 +21,7 @@ def main():
     from server.iec104_server import IEC104Server
     from client.iec104 import IEC104Master
     with tempfile.TemporaryDirectory() as directory,ExitStack() as stack:
-        data=SimulatorStore(Path(directory)/'s.sqlite3');stack.callback(data.close);fill_one(data,2404)
+        data=SimulatorStore(Path(directory)/'s.db');stack.callback(data.close);fill_one(data,2404)
         with data.connection() as con:
             con.execute('BEGIN')
             for n in range(384):

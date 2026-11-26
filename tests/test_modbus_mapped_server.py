@@ -15,7 +15,7 @@ class MappedModbusContracts(unittest.TestCase):
         for order in range(4):
             with self.subTest(order=order), ExitStack() as stack:
                 root = Path(stack.enter_context(tempfile.TemporaryDirectory()))
-                store = ScadaStore(root/'scdfe_s.sqlite3'); stack.callback(store.close)
+                store = ScadaStore(root/'scdfe_s.db'); stack.callback(store.close)
                 store.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='modbus-tcp'))
                 store.create_row('fes_channel_modbus_tcp_define',dict(channel_id=1,remote_host='127.0.0.1',remote_port=502,unit_id=1))
                 for kind,value in [('yc',12.5),('yx',1),('yk',0),('yt',0)]:
@@ -48,7 +48,7 @@ class MappedModbusContracts(unittest.TestCase):
     def test_signed_and_wide_values_and_serial_codec(self):
         with ExitStack() as stack:
             root = Path(stack.enter_context(tempfile.TemporaryDirectory()))
-            store = ScadaStore(root/'scdfe_s.sqlite3'); stack.callback(store.close)
+            store = ScadaStore(root/'scdfe_s.db'); stack.callback(store.close)
             store.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='modbus-rtu'))
             points = []
             for no,dtype,value in [(1,'int16',-123),(2,'int32',-123456),(3,'uint32',123456)]:

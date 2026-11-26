@@ -78,7 +78,7 @@ class IEC104DoubleRegressionTests(unittest.TestCase):
 
     def test_web_persists_normalized_double_updates_and_preserves_unknown_state(self):
         with tempfile.TemporaryDirectory() as folder:
-            store = ScadaStore(Path(folder) / 'review.sqlite3')
+            store = ScadaStore(Path(folder) / 'review.db')
             store.create_row('fes_rtu_define', {
                 'rtu_id': 7, 'channel_id': 7, 'channel_type': 'iec104',
                 'process_enable': 0,
@@ -136,7 +136,7 @@ class IEC104DoubleRegressionTests(unittest.TestCase):
 
     def test_transmission_double_commands_preserve_source_off_on(self):
         with tempfile.TemporaryDirectory() as folder:
-            db = Path(folder) / 'review.sqlite3'
+            db = Path(folder) / 'review.db'
             store = ScadaStore(db)
             store.create_row('fes_rtu_define', {
                 'rtu_id': 7, 'channel_id': 7, 'channel_type': 'iec104',

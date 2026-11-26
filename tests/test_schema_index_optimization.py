@@ -18,7 +18,7 @@ SPEC.loader.exec_module(MODULE)
 class SchemaIndexOptimizationTests(unittest.TestCase):
     def test_command_history_legacy_index_migration_is_idempotent(self):
         with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "scada.sqlite3"
+            path = Path(folder) / "scada.db"
             connection = sqlite3.connect(path)
             connection.executescript(
                 """

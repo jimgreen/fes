@@ -168,7 +168,7 @@ class BacnetTests(unittest.TestCase):
 
     def test_from_store_uses_current_channel_table_and_explicit_point_map(self):
         with TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "scada.sqlite3")
+            store = ScadaStore(Path(directory) / "scada.db")
             store.create_row("fes_rtu_define", {
                 "rtu_id": 7, "channel_type": "bacnet",
                 "channel_id": 1,

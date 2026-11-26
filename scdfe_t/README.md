@@ -24,13 +24,13 @@ Web 操作审计覆盖通道/映射增删改、批量映射、进程启停、报
 - `dbdef/json/fes_scdfe_t_define.json`：转发通道定义；
 - `dbdef/json/fes_scdfe_t_point_define.json`：通道内四遥映射定义；运行时由转发进程维护 `value`、`status`、`refresh_time`、`forward_time` 和 `command_receive_time`，用于 Web 实时查看转发状态。
 
-C/T 共享 `scada.sqlite3` 业务数据库，S 保留独立的 `scdfe_s.sqlite3` 模拟库。三个程序独立收发规约报文，C/T 的数据和命令只通过数据库交换：T 直接提交命令事务，C 自主读取待处理指令并完成设备侧下发。T 不需要连接 C 的写库 IPC，也不要求 C 先启动。运行前先用数据库初始化流程创建/升级表，然后启动 Web 管理服务：
+C/T 共享 `scada.db` 业务数据库，S 保留独立的 `scdfe_s.db` 模拟库。三个程序独立收发规约报文，C/T 的数据和命令只通过数据库交换：T 直接提交命令事务，C 自主读取待处理指令并完成设备侧下发。T 不需要连接 C 的写库 IPC，也不要求 C 先启动。运行前先用数据库初始化流程创建/升级表，然后启动 Web 管理服务：
 
 ```powershell
 Set-Location D:\codex\scada
 .\.venv\Scripts\python.exe -B -m scdfe_t.web.server \
   --host 127.0.0.1 --port 8879 \
-  --db D:\codex\scada\db\scada.sqlite3
+  --db D:\codex\scada\db\scada.db
 ```
 
 Linux/macOS：
@@ -39,7 +39,7 @@ Linux/macOS：
 cd /opt/scada
 .venv/bin/python -B -m scdfe_t.web.server \
   --host 127.0.0.1 --port 8879 \
-  --db /var/lib/scada/scada.sqlite3
+  --db /var/lib/scada/scada.db
 ```
 
 浏览器打开 `http://127.0.0.1:8879/`。服务只负责转发通道的配置、进程控制、点映射和日志查看；`scdfe_c` 的 RTU/四遥维护仍由 `scdfe_c` Web 服务提供。
@@ -88,7 +88,7 @@ Web 启动和停止是推荐方式。需要脚本或调试时，可直接运行�
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m scdfe_t \
-  --db D:\codex\scada\db\scada.sqlite3 \
+  --db D:\codex\scada\db\scada.db \
   --channel-id 1
 ```
 
@@ -174,6 +174,6 @@ Modbus 15/16 多点写入在一个数据库事务内校验并提交。任一点�
 
 导航“客户端连接”（`/connections`），或通信监控中的“客户端连接”，可查看 IEC104 / Modbus TCP 转发通道实际接入的远方客户端。每条连接有独立 URL `/connections/<编号>`，显示双方地址、状态、接入/断开时间、收发统计、交互、日志及 HEX；同 IP、多客户端、重连不会混用会话编号。
 
-转发子进程异步批量写入 `<业务库名>.scdfe_t.connections.sqlite3`，Web 只读该库；仍保持 C/T 共享业务库、S 独立库的架构。原始报文遵循通道“报文保存”开关。每连接最近 10000 条事件、离线保留 7 天；清理数和观察记录丢失会显式显示，记录进程心跳超时显示状态未知。旧版通道日志不回填成独立连接日志。
+转发子进程异步批量写入 `<业务库名>.scdfe_t.connections.db`，Web 只读该库；仍保持 C/T 共享业务库、S 独立库的架构。原始报文遵循通道“报文保存”开关。每连接最近 10000 条事件、离线保留 7 天；清理数和观察记录丢失会显式显示，记录进程心跳超时显示状态未知。旧版通道日志不回填成独立连接日志。
 
 接口同 S：`GET /api/connections?channel_id=1`、`GET /api/connections/<编号>`、`GET /api/connections/<编号>/events?kind=interaction&limit=100`；`before` 可继续查较早事件。页面提供筛选、5 秒刷新、历史翻阅与当前显示导出。IEC104 转发使用项目内纯 Python 引擎，无需 `c104` 或 C++ 编译；Web 的 `SCADA_PYTHON` 可明确指定运行解释器。部署与验证见 [纯 Python IEC104 说明](../docs/iec104_python.md)。

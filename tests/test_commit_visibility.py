@@ -25,7 +25,7 @@ class CommitVisibilityTests(unittest.TestCase):
     def setUp(self):
         tmp=tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.db=Path(tmp.name)/'scada.sqlite3'
+        self.db=Path(tmp.name)/'scada.db'
         self.store=ScadaStore(self.db,connection_pool_size=1)
         self.addCleanup(self.store.close)
         self.store.create_row('fes_rtu_define',dict(rtu_id=7,channel_id=7,channel_type='iec104'))

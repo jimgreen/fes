@@ -58,7 +58,7 @@ class ServiceStopTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.web = make_server('127.0.0.1', 0, db_path=self.root / 'scdfe_s.sqlite3')
+        self.web = make_server('127.0.0.1', 0, db_path=self.root / 'scdfe_s.db')
         self.thread = threading.Thread(target=self.web.serve_forever, daemon=True)
         self.thread.start()
         self.addCleanup(self.close_web)

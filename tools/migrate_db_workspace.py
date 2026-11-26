@@ -37,9 +37,9 @@ from scdfe_c.web.service import SCHEMA_DIR, SchemaCatalog
 
 _SOURCE_MAPPINGS = (
     # (角色, 候选源文件名元组, 目标文件名)
-    ("c", ("scada.sqlite3", "scdfe_c.sqlite3"), "scdfe_c.sqlite3"),
-    ("s", ("scdfe_s.sqlite3",), "scdfe_s.sqlite3"),
-    ("d", ("scdfe_d.sqlite3",), "scdfe_d.sqlite3"),
+    ("c", ("scada.db", "scdfe_c.db", "scada.sqlite3", "scdfe_c.sqlite3"), "scdfe_c.db"),
+    ("s", ("scdfe_s.db", "scdfe_s.sqlite3"), "scdfe_s.db"),
+    ("d", ("scdfe_d.db", "scdfe_d.sqlite3"), "scdfe_d.db"),
 )
 
 _LOCK_ROLES = (
@@ -218,11 +218,12 @@ def migrate_workspace_databases(
             candidates_to_clean.extend(sorted(source_dir.glob("*.bak")))
             candidates_to_clean.extend(sorted(source_dir.glob("*.lock")))
             candidates_to_clean.extend(sorted(source_dir.glob("web_database_*.json")))
-            test_db = source_dir / "test_protocol_schema.sqlite3"
-            for suffix in ("", "-wal", "-shm"):
-                p = Path(str(test_db) + suffix)
-                if p.is_file():
-                    candidates_to_clean.append(p)
+            for test_name in ("test_protocol_schema.db", "test_protocol_schema.sqlite3"):
+                test_db = source_dir / test_name
+                for suffix in ("", "-wal", "-shm"):
+                    p = Path(str(test_db) + suffix)
+                    if p.is_file():
+                        candidates_to_clean.append(p)
         for tmp_script in sorted(repo_root.glob(".tmp_*")):
             if tmp_script.is_file():
                 candidates_to_clean.append(tmp_script)

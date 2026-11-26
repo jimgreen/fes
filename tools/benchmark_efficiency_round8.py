@@ -27,7 +27,7 @@ def main():
     results = []
     for rtu_count, point_count in ((1,10), (100,1000), (1000,100)):
         with tempfile.TemporaryDirectory(prefix='scada-catalog-') as directory:
-            service = TransStore(Path(directory)/'test.sqlite3',connection_pool_size=1)
+            service = TransStore(Path(directory)/'test.db',connection_pool_size=1)
             try:
                 with service.store.connection() as con:
                     con.execute('BEGIN IMMEDIATE')

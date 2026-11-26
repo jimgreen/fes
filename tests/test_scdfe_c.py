@@ -83,7 +83,7 @@ class ScdfeCTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.store = ScadaStore(self.root / "scada.sqlite3")
+        self.store = ScadaStore(self.root / "scada.db")
         # Supervisor tests use private databases; never contend with live RTUs.
         # Keep actual file locking, scoped to this fixture's temporary database.
         lock_patch = patch.object(runtime, "_rtu_lock", side_effect=lambda rid:

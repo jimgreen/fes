@@ -78,7 +78,7 @@ def main():
     results = []
     with tempfile.TemporaryDirectory(prefix='scada-command-poll-') as folder:
         temp = Path(folder)
-        db = temp / 'fixture.sqlite3'
+        db = temp / 'fixture.db'
         seed_protocol_test_data(ScadaStore(db), replicas=10)
         runtimes = {}
         for variant, source in (('before', before), ('after', after)):

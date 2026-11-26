@@ -12,7 +12,7 @@ class TransMonitorCatalogTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.db = Path(temporary.name)/'test.sqlite3'
+        self.db = Path(temporary.name)/'test.db'
         self.service = TransStore(self.db, connection_pool_size=1)
         self.addCleanup(self.service.store.close)
         with self.service.store.connection() as con:

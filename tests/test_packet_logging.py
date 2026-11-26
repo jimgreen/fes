@@ -31,7 +31,7 @@ class PacketLoggingTests(unittest.TestCase):
     def test_t_large_packet_log_reads_only_the_tail(self):
         from scdfe_t.web.service import TransStore
         with tempfile.TemporaryDirectory() as root:
-            service = TransStore(Path(root) / "scada.sqlite3")
+            service = TransStore(Path(root) / "scada.db")
             path = Path(root) / "logs" / "scdfe_t-channel-1-20261105-01.log"
             path.parent.mkdir()
             path.write_bytes((b"01:00:00 [LOG] old packet\n" * 100_000) +
@@ -60,7 +60,7 @@ class PacketLoggingTests(unittest.TestCase):
 
     def test_s_iec104_rx_tx_are_in_file_and_survive_service_restart(self):
         with tempfile.TemporaryDirectory() as root:
-            store = ScadaStore(Path(root) / "scada.sqlite3")
+            store = ScadaStore(Path(root) / "scada.db")
             packet_log_switch(store.db_path, 's').set_enabled(True)
             service = IEC104Service(store)
             service._on_receive_raw(bytes.fromhex("68 04 07 00 00 00"))
@@ -81,7 +81,7 @@ class LivePacketLoggingTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
-        self.store = ScadaStore(self.root / "scada.sqlite3")
+        self.store = ScadaStore(self.root / "scada.db")
         for family in ('s', 't'):
             packet_log_switch(self.store.db_path, family).set_enabled(True)
         self.logger = ScdfeLogger(self.root / "logs", process_name="scdfe_c-rtu-10")

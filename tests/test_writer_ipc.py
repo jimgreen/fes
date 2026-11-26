@@ -18,7 +18,7 @@ def _run_writer(db: str, schema: str, logs: str, queue, ready) -> None:
 class WriterIpcTests(unittest.TestCase):
     def test_writer_rejects_non_positive_points_and_nonfinite_yt(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "scada.sqlite3"
+            db = Path(directory) / "scada.db"
             store = ScadaStore(db)
             store.create_row("fes_rtu_define", {
                 "rtu_id": 1, "channel_id": 10, "channel_type": "iec104",
@@ -42,7 +42,7 @@ class WriterIpcTests(unittest.TestCase):
 
     def test_writer_accepts_boolean_yk_and_rejects_unsupported_protocol(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "scada.sqlite3"
+            db = Path(directory) / "scada.db"
             store = ScadaStore(db)
             store.create_row("fes_rtu_define", {
                 "rtu_id": 1, "channel_id": 10, "channel_type": "can",
@@ -66,7 +66,7 @@ class WriterIpcTests(unittest.TestCase):
     def test_command_is_committed_and_endpoint_removed_on_stop(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            db = root / "scada.sqlite3"
+            db = root / "scada.db"
             store = ScadaStore(db)
             store.create_row("fes_rtu_define", {
                 "rtu_id": 1, "channel_id": 10, "channel_type": "iec104",
@@ -106,7 +106,7 @@ class WriterIpcTests(unittest.TestCase):
 
     def test_rejected_or_stopped_writer_is_reported(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "scada.sqlite3"
+            db = Path(directory) / "scada.db"
             ScadaStore(db)
             with self.assertRaises(WriterUnavailable):
                 WriterClient(db).submit_command(1, "yk", 1, 1)

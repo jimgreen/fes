@@ -13,7 +13,7 @@ class IEC104ServiceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.store = ScadaStore(Path(self.temp.name) / "scada.sqlite3")
+        self.store = ScadaStore(Path(self.temp.name) / "scada.db")
         self.addCleanup(self.store.close)
         self.store.create_row("fes_rtu_define", {
             "rtu_id": 1, "channel_id": 1, "channel_type": "iec104", "name": "测试站",

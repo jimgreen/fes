@@ -11,7 +11,7 @@ from scdfe_s.web.server import make_server, ScadaHandler
 
 
 def test_runtime_batch_uses_one_executemany_call(tmp_path):
-    store = ScadaStore(tmp_path/'batch.sqlite3')
+    store = ScadaStore(tmp_path/'batch.db')
     try:
         statuses = [RuntimeStatusStore(store, 'scdfe_s', write_interval_ms=0) for _ in range(3)]
         snapshots = [status._prepare(n, {'state': 'running', 'rx_count': n}, force=True)
@@ -43,7 +43,7 @@ def test_runtime_batch_uses_one_executemany_call(tmp_path):
 
 
 def test_transport_config_joins_rtu_and_protocol_row_once(tmp_path):
-    store = ScadaStore(tmp_path/'config.sqlite3')
+    store = ScadaStore(tmp_path/'config.db')
     try:
         store.create_row('fes_rtu_define', {
             'rtu_id': 1, 'channel_id': 11, 'channel_type': 'modbus-tcp', 'name': '测试站'})
@@ -73,7 +73,7 @@ def test_transport_config_joins_rtu_and_protocol_row_once(tmp_path):
 
 @pytest.fixture
 def monitor(tmp_path):
-    server = make_server('127.0.0.1', 0, db_path=tmp_path/'sim.sqlite3')
+    server = make_server('127.0.0.1', 0, db_path=tmp_path/'sim.db')
     with server.store.connection() as con:
         con.executemany('INSERT INTO fes_rtu_define(rtu_id,channel_id,channel_type,name) VALUES(?,?,?,?)',
             [(n,n,('iec104','modbus-tcp','can')[(n-1)%3],f'站{n}') for n in range(1,65)])

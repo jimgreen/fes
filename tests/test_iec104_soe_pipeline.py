@@ -68,7 +68,7 @@ class SOEPipelineTests(unittest.TestCase):
 
     def test_batched_repeated_ioa_and_identical_asdus_are_not_coalesced(self):
         with tempfile.TemporaryDirectory() as root, ExitStack() as stack:
-            store=ScadaStore(Path(root)/'c.sqlite3');stack.callback(store.close)
+            store=ScadaStore(Path(root)/'c.db');stack.callback(store.close)
             server=IEC104Server(ip='127.0.0.1',port=port());stack.callback(server.stop)
             fill_one(store,server.port)
             with store.connection() as con:
@@ -97,8 +97,8 @@ class SOEPipelineTests(unittest.TestCase):
     def test_s_database_burst_and_offline_changes_recover_after_restart(self):
         with tempfile.TemporaryDirectory() as root, ExitStack() as stack:
             root=Path(root)
-            s=SimulatorStore(root/'s.sqlite3');stack.callback(s.close)
-            c=ScadaStore(root/'c.sqlite3');stack.callback(c.close)
+            s=SimulatorStore(root/'s.db');stack.callback(s.close)
+            c=ScadaStore(root/'c.db');stack.callback(c.close)
             listen=port();fill_one(s,listen);fill_one(c,listen)
             with c.connection() as con: con.execute('UPDATE fes_channel_iec104_define SET w=1,t2=1')
             service=IEC104Service(s,config_path=root/'s.json');stack.callback(service.close)
@@ -120,7 +120,7 @@ class SOEPipelineTests(unittest.TestCase):
 
     def test_t_database_forward_preserves_bytes_and_cursor_on_disconnect(self):
         with tempfile.TemporaryDirectory() as root, ExitStack() as stack:
-            root=Path(root);store=ScadaStore(root/'c.sqlite3');stack.callback(store.close)
+            root=Path(root);store=ScadaStore(root/'c.db');stack.callback(store.close)
             source=IEC104Server(ip='127.0.0.1',port=port());stack.callback(source.stop)
             fill_one(store,source.port)
             with store.connection() as con:

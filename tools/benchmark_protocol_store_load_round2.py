@@ -134,7 +134,7 @@ def load(connection, protocol, rtu_id, narrow):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--db", type=Path, default=Path("db/scada.sqlite3"))
+    parser.add_argument("--db", type=Path, default=Path("db/scada.db"))
     parser.add_argument("--repeat", type=int, default=5)
     parser.add_argument("--rounds", type=int, default=5)
     parser.add_argument("--output", type=Path, required=True)

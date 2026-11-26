@@ -22,7 +22,7 @@ def free_port():
 class DatabaseExchangeTests(unittest.TestCase):
     def setUp(self):
         temp=tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
-        self.root=Path(temp.name); self.store=ScadaStore(self.root/'scada.sqlite3')
+        self.root=Path(temp.name); self.store=ScadaStore(self.root/'scada.db')
         self.addCleanup(self.store.close)
         self.store.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='modbus-tcp'))
         for kind in ('yk','yt'):

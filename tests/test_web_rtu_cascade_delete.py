@@ -12,7 +12,7 @@ from scdfe_c.web.server import make_server
 class RtuCascadeDeleteTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.db = Path(self.temp.name) / "scada.sqlite3"
+        self.db = Path(self.temp.name) / "scada.db"
         self.server = make_server("127.0.0.1", 0, db_path=self.db)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

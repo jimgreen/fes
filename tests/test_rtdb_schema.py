@@ -37,7 +37,7 @@ class EmbeddedSchemaTests(unittest.TestCase):
 
     def test_scada_business_and_runtime_table_registration(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / 'scdfe-c.live.sqlite3'
+            path = Path(directory) / 'scdfe-c.live.db'
             store = ScadaStore(path)
             try:
                 with store.connection() as connection:

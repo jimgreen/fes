@@ -31,7 +31,7 @@ def main():
     before_service=helpers.old_module('scdfe_s.web._round4_before','scdfe_s/web/iec104_service.py').IEC104Service
     results=[]
     with tempfile.TemporaryDirectory(prefix='scada-round4-') as tmp:
-        path=Path(tmp)/'data.sqlite3'
+        path=Path(tmp)/'data.db'
         stores=[before_store(path,connection_pool_size=1),ScadaStore(path,connection_pool_size=1)]
         try:
             with stores[1].connection() as con:

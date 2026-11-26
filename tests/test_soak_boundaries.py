@@ -16,7 +16,7 @@ class ModbusPublicationTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.store = ScadaStore(Path(tmp.name)/'scada.sqlite3',connection_pool_size=2)
+        self.store = ScadaStore(Path(tmp.name)/'scada.db',connection_pool_size=2)
         self.addCleanup(self.store.close)
         self.store.create_row('fes_rtu_define',dict(rtu_id=7,channel_id=17,channel_type='modbus-tcp'))
         for n in (1,2):

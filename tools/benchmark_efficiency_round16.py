@@ -17,7 +17,7 @@ def main():
     cases=[]
     with tempfile.TemporaryDirectory(prefix='scada-round16-') as directory:
         for size in (1,25,100):
-            runtime=TransRuntime(Path(directory)/f'{size}.sqlite3',channel_id=1)
+            runtime=TransRuntime(Path(directory)/f'{size}.db',channel_id=1)
             runtime.store.connection_pool_size=2
             points=[]
             try:

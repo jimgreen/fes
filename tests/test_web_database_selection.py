@@ -34,7 +34,7 @@ class DatabaseSelectionTests(unittest.TestCase):
         for role, factory, store_cls in [('c', make_c, ScadaStore), ('s', make_s, SimulatorStore), ('t', make_t, ScadaStore)]:
             with self.subTest(role=role), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
-                first, second = root / 'first.sqlite3', root / '中文 空格.sqlite3'
+                first, second = root / 'first.db', root / '中文 空格.db'
                 target = store_cls(second)
                 target.create_row('fes_rtu_define', {'rtu_id': 17, 'name': '第二库', 'channel_id': 17, 'channel_type': 'iec104'})
                 target.create_row('fes_channel_iec104_define', {'id': 17, 'channel_id': 17})
@@ -67,12 +67,12 @@ class DatabaseSelectionTests(unittest.TestCase):
     def test_invalid_targets_leave_current_database_and_target_untouched(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            wrong = root / 's.sqlite3'; s = SimulatorStore(wrong); s.close()
-            model = root / 'model.sqlite3'
+            wrong = root / 's.db'; s = SimulatorStore(wrong); s.close()
+            model = root / 'model.db'
             with closing(sqlite3.connect(model)) as con:
                 con.execute('CREATE TABLE model(id INTEGER)')
-            for bad in [wrong, model, root / 'missing.sqlite3']:
-                server = make_c('127.0.0.1', 0, db_path=root / 'c.sqlite3')
+            for bad in [wrong, model, root / 'missing.db']:
+                server = make_c('127.0.0.1', 0, db_path=root / 'c.db')
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
                 previous = bad.read_bytes() if bad.exists() else None
                 try:
@@ -89,14 +89,14 @@ class DatabaseSelectionTests(unittest.TestCase):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            target = SimulatorStore(root / 'second.sqlite3'); target.close()
-            server = make_s('127.0.0.1', 0, db_path=root / 'first.sqlite3')
+            target = SimulatorStore(root / 'second.db'); target.close()
+            server = make_s('127.0.0.1', 0, db_path=root / 'first.db')
             thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
             try:
                 server._channel_service_cache['test-running'] = Mock(running=True)
                 _, before = self.request(server, 'GET', '/api/database')
                 status, error = self.request(server, 'POST', '/api/database',
-                    {'database': 'second.sqlite3', 'expected_database': before['database']})
+                    {'database': 'second.db', 'expected_database': before['database']})
                 self.assertEqual(status, 409, error)
                 self.assertEqual(error['error']['code'], 'database_busy')
             finally:
@@ -107,8 +107,8 @@ class DatabaseSelectionTests(unittest.TestCase):
         for role, factory in [('c', make_c), ('t', make_t)]:
             with self.subTest(role=role), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
-                other = ScadaStore(root / 'second.sqlite3'); other.close()
-                server = factory('127.0.0.1', 0, db_path=root / 'first.sqlite3')
+                other = ScadaStore(root / 'second.db'); other.close()
+                server = factory('127.0.0.1', 0, db_path=root / 'first.db')
                 lease = None
                 if role == 'c':
                     server.process_controller._operation = {'status': 'running'}
@@ -120,7 +120,7 @@ class DatabaseSelectionTests(unittest.TestCase):
                 try:
                     _, before = self.request(server, 'GET', '/api/database')
                     status, error = self.request(server, 'POST', '/api/database',
-                        {'database': 'second.sqlite3', 'expected_database': before['database']})
+                        {'database': 'second.db', 'expected_database': before['database']})
                     self.assertEqual(status, 409, error)
                     self.assertEqual(error['error']['code'], 'database_busy')
                 finally:
@@ -131,8 +131,8 @@ class DatabaseSelectionTests(unittest.TestCase):
         from concurrent.futures import ThreadPoolExecutor
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            other = ScadaStore(root / 'second.sqlite3'); other.close()
-            server = make_c('127.0.0.1', 0, db_path=root / 'first.sqlite3')
+            other = ScadaStore(root / 'second.db'); other.close()
+            server = make_c('127.0.0.1', 0, db_path=root / 'first.db')
             server.store.create_row('fes_rtu_define', {'rtu_id': 1, 'name': '旧库', 'channel_id': 1, 'channel_type': 'iec104'})
             entered, release = threading.Event(), threading.Event()
             original = server.store.get_row
@@ -146,7 +146,7 @@ class DatabaseSelectionTests(unittest.TestCase):
                     read = pool.submit(self.request, server, 'GET', '/api/rtus/1')
                     self.assertTrue(entered.wait(3))
                     switch = pool.submit(self.request, server, 'POST', '/api/%64atabase/',
-                        {'database': 'second.sqlite3', 'expected_database': 'first.sqlite3'})
+                        {'database': 'second.db', 'expected_database': 'first.db'})
                     self.assertFalse(switch.done())
                     release.set()
                     self.assertEqual(read.result()[1]['item']['name'], '旧库')
@@ -160,12 +160,12 @@ class DatabaseSelectionTests(unittest.TestCase):
             with self.subTest(role=role), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
                 preference = root / 'selection.json'
-                server = factory('127.0.0.1', 0, db_path=root / 'first.sqlite3', selection_path=preference, workspace_root=root)
+                server = factory('127.0.0.1', 0, db_path=root / 'first.db', selection_path=preference, workspace_root=root)
                 self.assertEqual(server._database_base_directory, root.resolve())
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
                 try:
                     _, before = self.request(server, 'GET', '/api/database')
-                    self.assertEqual(before['relative_database'], 'first.sqlite3')
+                    self.assertEqual(before['relative_database'], 'first.db')
                     body = {'directory': '.', 'name': '新目录 空格'}
                     status, created = self.request(server, 'POST', '/api/database/mkdir', body)
                     self.assertEqual(status, 201, created)
@@ -180,15 +180,15 @@ class DatabaseSelectionTests(unittest.TestCase):
                                      root.resolve() / before['database'])
                     self.assertEqual(self.request(server, 'POST', '/api/database/mkdir', body)[0], 409)
                     self.assertEqual(self.request(server, 'POST', '/api/database/mkdir', {'directory': directory, 'name': '../escape'})[0], 400)
-                    status, result = self.request(server, 'POST', '/api/database/create', {'directory': directory, 'name': '空白.sqlite3'})
+                    status, result = self.request(server, 'POST', '/api/database/create', {'directory': directory, 'name': '空白.db'})
                     self.assertEqual(status, 201, result)
                     self.assertTrue(result['validation']['valid'])
-                    target = root / '新目录 空格' / '空白.sqlite3'
+                    target = root / '新目录 空格' / '空白.db'
                     previous = target.read_bytes()
-                    self.assertEqual(self.request(server, 'POST', '/api/database/create', {'directory': directory, 'name': '空白.sqlite3'})[0], 409)
+                    self.assertEqual(self.request(server, 'POST', '/api/database/create', {'directory': directory, 'name': '空白.db'})[0], 409)
                     self.assertEqual(target.read_bytes(), previous)
                     _, tree = self.request(server, 'GET', '/api/database/tree?directory=' + quote(directory))
-                    self.assertEqual(tree['entries'], [{'name': '空白.sqlite3', 'path': result['path'], 'directory': False}])
+                    self.assertEqual(tree['entries'], [{'name': '空白.db', 'path': result['path'], 'directory': False}])
                     _, checked = self.request(server, 'GET', '/api/database/validate?path=' + quote(result['path']))
                     self.assertTrue(checked['valid'], checked)
                     status, switched = self.request(server, 'POST', '/api/database', {'database': result['path'], 'expected_database': before['database']})
@@ -206,7 +206,7 @@ class DatabaseSelectionTests(unittest.TestCase):
                     self.assertEqual(json.loads(preference.read_text(encoding='utf-8'))['database'], result['path'])
                 finally:
                     server.shutdown(); server.server_close(); thread.join(3)
-                selected = selected_database(preference, None, root / 'first.sqlite3', workspace_root=root)
+                selected = selected_database(preference, None, root / 'first.db', workspace_root=root)
                 with factory('127.0.0.1', 0, db_path=selected, selection_path=preference, workspace_root=root) as reopened:
                     info = reopened.database_info()
                     self.assertEqual(info['database'], result['path'])
@@ -219,7 +219,7 @@ class DatabaseSelectionTests(unittest.TestCase):
                  ('t', make_t, '/api/channels/1/start', {})]
         for role, factory, endpoint, body in cases:
             with self.subTest(role=role), tempfile.TemporaryDirectory() as folder:
-                path = Path(folder) / 'db.sqlite3'
+                path = Path(folder) / 'db.db'
                 server = factory('127.0.0.1', 0, db_path=path)
                 thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
                 try:

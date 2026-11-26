@@ -26,7 +26,7 @@ def free_port():
 class ProtocolServiceTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.store = ScadaStore(Path(self.temp.name) / "scada.sqlite3")
+        self.store = ScadaStore(Path(self.temp.name) / "scada.db")
 
     def tearDown(self):
         self.temp.cleanup()

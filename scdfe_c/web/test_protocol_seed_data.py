@@ -12,7 +12,7 @@ class ProtocolSeedTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.store = ScadaStore(Path(self.temp.name) / "scada.sqlite3")
+        self.store = ScadaStore(Path(self.temp.name) / "scada.db")
 
     def test_each_protocol_station_has_ten_rtu_replicas(self):
         report = seed_protocol_test_data(self.store)

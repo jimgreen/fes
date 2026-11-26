@@ -104,8 +104,8 @@ class ChannelEfileHttpAndCommTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.s_db = self.root / "scdfe_s.sqlite3"
-        self.c_db = self.root / "scdfe_c.sqlite3"
+        self.s_db = self.root / "scdfe_s.db"
+        self.c_db = self.root / "scdfe_c.db"
 
         self.s_httpd = make_s_server("127.0.0.1", 0, db_path=self.s_db)
         self.s_thread = threading.Thread(target=self.s_httpd.serve_forever, daemon=True)

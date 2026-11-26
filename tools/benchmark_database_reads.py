@@ -103,7 +103,7 @@ def main() -> None:
     results = []
     with tempfile.TemporaryDirectory(prefix="scada-db-read-") as folder:
         root = Path(folder)
-        db = root / "fixture.sqlite3"
+        db = root / "fixture.db"
         template = ScadaStore(db)
         seed_protocol_test_data(template, replicas=10)
         runtimes = {}

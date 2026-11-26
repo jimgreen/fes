@@ -112,12 +112,12 @@ def main() -> int:
         parser.error("rows and repeats must be positive")
     with tempfile.TemporaryDirectory(prefix="scada-schema-index-") as folder:
         root = Path(folder)
-        before_history = history_database(root / "history-before.sqlite3", False, args.rows)
-        after_history = history_database(root / "history-after.sqlite3", True, args.rows)
+        before_history = history_database(root / "history-before.db", False, args.rows)
+        after_history = history_database(root / "history-after.db", True, args.rows)
         before_history_time, before_history_plan = history_benchmark(before_history, args.repeats)
         after_history_time, after_history_plan = history_benchmark(after_history, args.repeats)
-        before_write_db, payload = write_database(root / "write-before.sqlite3", True, args.rows)
-        after_write_db, _ = write_database(root / "write-after.sqlite3", False, args.rows)
+        before_write_db, payload = write_database(root / "write-before.db", True, args.rows)
+        after_write_db, _ = write_database(root / "write-after.db", False, args.rows)
         before_write, before_write_samples = write_benchmark(before_write_db, payload, args.repeats)
         after_write, after_write_samples = write_benchmark(after_write_db, payload, args.repeats)
         for connection in (before_history, after_history, before_write_db, after_write_db):

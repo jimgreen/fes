@@ -12,7 +12,7 @@ Windows：
 ```powershell
 Set-Location D:\codex\scada
 .\.venv\Scripts\python.exe -m scdfe_c `
-  --db D:\codex\scada\db\scada.sqlite3 `
+  --db D:\codex\scada\db\scada.db `
   --log-dir D:\codex\scada\db\logs
 ```
 
@@ -24,7 +24,7 @@ Linux/macOS：
 ```sh
 cd /opt/scada
 .venv/bin/python -m scdfe_c \
-  --db /var/lib/scada/scada.sqlite3 \
+  --db /var/lib/scada/scada.db \
   --log-dir /var/log/scada
 ```
 
@@ -58,13 +58,13 @@ Invoke-RestMethod 'http://127.0.0.1:8877/api/rtus/7' -Method Patch `
 
 ```powershell
 Set-Location D:\codex\scada
-.\.venv\Scripts\python.exe -m scdfe_c --db D:\codex\scada\db\scada.sqlite3 --rtu-id 7
+.\.venv\Scripts\python.exe -m scdfe_c --db D:\codex\scada\db\scada.db --rtu-id 7
 ```
 
 Linux 示例：
 
 ```sh
-.venv/bin/python -m scdfe_c --db /var/lib/scada/scada.sqlite3 --rtu-id 7
+.venv/bin/python -m scdfe_c --db /var/lib/scada/scada.db --rtu-id 7
 ```
 
 只运行十个成功采集周期后退出：
@@ -234,12 +234,12 @@ IEC104 从同一份原生 `Point.info` 读取数值、质量码和时标。各�
 
 服务通过现有写库进程 IPC 提交命令。写库事务提交成功后 TCP 服务才返回确认；随后对应通信线程通过命令版本检测，调用原有规约主站完成实际下发。同一请求尚未完成时，相同编号和内容的重试等待同一次写入；完成后可复用结果。同一编号若换了点号、值或其他命令内容，返回 `409 request_id_conflict`，不会执行新命令。已完成结果仅保留在当前写库进程最近 2048 个请求的内存缓存中；重启或缓存淘汰后，不能依赖旧编号防止重复操作。
 
-默认监听 `127.0.0.1:8890`。Web 页面“进程监控”中的 TCP 指令服务配置可修改监听地址、端口、认证令牌和日志保留小时数，并独立启停。端点元数据保存在数据库旁的 `scada.sqlite3.scdfe_command.json`，本地调用可使用 `CommandClient` 自动发现；跨服务器调用时应显式配置 host、port 和 token。
+默认监听 `127.0.0.1:8890`。Web 页面“进程监控”中的 TCP 指令服务配置可修改监听地址、端口、认证令牌和日志保留小时数，并独立启停。端点元数据保存在数据库旁的 `scada.db.scdfe_command.json`，本地调用可使用 `CommandClient` 自动发现；跨服务器调用时应显式配置 host、port 和 token。
 
 命令行调试入口：
 
 ```powershell
-.\.venv\Scripts\python.exe -B -m scdfe_c.command_server --db D:\codex\scada\db\scada.sqlite3
+.\.venv\Scripts\python.exe -B -m scdfe_c.command_server --db D:\codex\scada\db\scada.db
 ```
 
 ## 日志
@@ -319,7 +319,7 @@ Web 请求启动时，如果当前库没有活动主进程，但服务器级主�
 已有数据库应先停止 Web 和 `scdfe_c`，执行一次字段迁移，再启动新版本：
 
 ```powershell
-.\.venv\Scripts\python.exe tools/remove_device_values.py --db D:\codex\scada\db\scada.sqlite3
+.\.venv\Scripts\python.exe tools/remove_device_values.py --db D:\codex\scada\db\scada.db
 ```
 
 工具在 `db/backups` 创建 SQLite 完整备份，在事务中删除列并更新 schema 指纹；

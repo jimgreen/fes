@@ -27,7 +27,7 @@ class SOEContracts(unittest.TestCase):
 
     def test_database_point_type_takes_precedence_over_channel_default(self):
         with tempfile.TemporaryDirectory() as directory:
-            store=ScadaStore(Path(directory)/'scada.sqlite3')
+            store=ScadaStore(Path(directory)/'scada.db')
             try:
                 fill_one(store,2404)
                 for typ in (30,31,32,1,3,5):
@@ -41,7 +41,7 @@ class SOEContracts(unittest.TestCase):
 
     def test_explicit_overrides_and_unmapped_default_still_work(self):
         with tempfile.TemporaryDirectory() as directory:
-            store=ScadaStore(Path(directory)/'scada.sqlite3')
+            store=ScadaStore(Path(directory)/'scada.db')
             try:
                 fill_one(store,2404)
                 for override,expected in (({'data_type':3},3),({'type_id':31},31)):

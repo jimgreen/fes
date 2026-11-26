@@ -14,7 +14,7 @@ class ServiceFileLogTests(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
-        self.store = SimpleNamespace(db_path=self.root / "scada.sqlite3")
+        self.store = SimpleNamespace(db_path=self.root / "scada.db")
 
     def file(self, service, hour, message):
         path = self.root / "logs" / hour[:4] / hour[4:6] / hour[6:8] / hour[9:]

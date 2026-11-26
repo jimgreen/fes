@@ -34,7 +34,7 @@ def fill(store, count, ports):
 
 def pipeline(channels, events):
     with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
-        root=Path(directory);s=SimulatorStore(root/'s.sqlite3');c=ScadaStore(root/'c.sqlite3')
+        root=Path(directory);s=SimulatorStore(root/'s.db');c=ScadaStore(root/'c.db')
         stack.callback(s.close);stack.callback(c.close)
         ports=[port() for _ in range(channels)];fill(s,channels,ports);fill(c,channels,ports)
         services=[];runtimes=[];captures=[]
@@ -112,7 +112,7 @@ def write_comparison(events=512, rounds=3):
         samples=[]
         for _ in range(rounds):
             with tempfile.TemporaryDirectory() as directory:
-                store=ScadaStore(Path(directory)/'c.sqlite3');receiver=SoeReceiver(store,1,1,{(1,30):1})
+                store=ScadaStore(Path(directory)/'c.db');receiver=SoeReceiver(store,1,1,{(1,30):1})
                 try:
                     frames=[b'\x68'+bytes((len(a)+4,))+b'\0'*4+a for g in groups for a in encode_events(g)]
                     start=time.perf_counter()

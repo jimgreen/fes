@@ -29,7 +29,7 @@ def main():
                 rounds=40,initialized_timestamps=args.initialized_timestamps,
                 scope='T production refresh, local IEC104 cache, runtime DB; no TCP client')
     with tempfile.TemporaryDirectory(prefix='scada-round10-') as directory:
-        store=ScadaStore(Path(directory)/'data.sqlite3')
+        store=ScadaStore(Path(directory)/'data.db')
         with store.connection() as con:
             con.execute('BEGIN')
             con.execute("INSERT INTO fes_scdfe_t_define(channel_id,protocol,bind_host,bind_port) VALUES(1,'iec104','127.0.0.1',2404)")

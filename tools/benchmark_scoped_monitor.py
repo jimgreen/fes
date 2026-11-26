@@ -38,7 +38,7 @@ def baseline_methods(ref):
 
 
 def run_case(root, stations, variant, baseline, repeat):
-    httpd = web.make_server(port=0, db_path=root / "s.sqlite3")
+    httpd = web.make_server(port=0, db_path=root / "s.db")
     with httpd.store.connection() as con:
         con.execute("BEGIN")
         con.executemany(

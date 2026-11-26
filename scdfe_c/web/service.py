@@ -1,7 +1,7 @@
 """SQLite-backed SCADA schema and row service.
 
 The service deliberately keeps the JSON definitions authoritative.  SQLite is
-used for durable rows in ``D:\\codex\\scada\\db\\scada.sqlite3`` by default;
+used for durable rows in ``D:\\codex\\workspace\\realtime\\qinling\\sqldb\\fes\\scdfe_c.db`` by default;
 each operation owns an exclusive connection. Web servers may retain a bounded
 number of idle connections; other callers use short-lived connections.
 """

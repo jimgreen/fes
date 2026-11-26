@@ -134,7 +134,7 @@ class RtuWireTests(unittest.TestCase):
 class RtuConfigTests(unittest.TestCase):
     def test_store_loading_serial_settings_and_protocol(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / 'scada.sqlite3')
+            store = ScadaStore(Path(directory) / 'scada.db')
             store.create_row('fes_rtu_define', {
                 'rtu_id': 7, 'channel_id': 70, 'channel_type': 'modbus-rtu',
                             })

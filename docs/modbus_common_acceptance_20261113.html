@@ -3,7 +3,7 @@
 <p>常用 TCP/RTU 软件功能及 C/T 数据库交换验证通过。T 只提供 IEC104 与 Modbus TCP 转发；S 保留独立模拟库，C/T 共用业务库。</p>
 <div class="callout"><strong>本轮实现：</strong>T 已取消对 C 写库 IPC 的依赖；命令直接提交数据库事务，C 独立读取与执行。Modbus 15/16 多点命令统一校验、整批提交或回滚。</div>
 <nav><a href="#architecture">解耦方式</a><a href="#functions">正确性</a><a href="#latency">时延</a><a href="#efficiency">效率对比</a><a href="#limits">验证边界</a><a href="#evidence">证据与复现</a></nav></header>
-<section id="architecture"><h2>独立收发，数据库交换</h2><div class="chain">现场设备 ⇄ C 采集 ⇄ scada.sqlite3 ⇄ T 转发 ⇄ 远方系统<br>S 模拟器 ⇄ 独立 scdfe_s.sqlite3</div>
+<section id="architecture"><h2>独立收发，数据库交换</h2><div class="chain">现场设备 ⇄ C 采集 ⇄ scada.db ⇄ T 转发 ⇄ 远方系统<br>S 模拟器 ⇄ 独立 scdfe_s.db</div>
 <p>C/T 通过四遥表交换状态与待处理命令，各自拥有连接、报文解析、超时及重连逻辑。T 不把报文或运行时对象交给 C，也不再访问 C 的命令 IPC。S 使用自己的配置和模拟数据，独立收发协议报文。</p>
 <p>回环验收中，S 充当外部设备模拟端供 C 连接，以验证两端协议兼容；这条测试接线不构成生产组件间的内部调用依赖。测试只使用临时数据库与 127.0.0.1 随机端口。</p>
 <p>T 写入 <code>value</code>、<code>cmd_time</code> 与待处理状态；C 发现后独立下发，更新 <code>cmd_handle_time</code> 及处理状态。C 停止时命令保存在数据库，不能据 T 的肯定应答宣称设备已执行。S 数据库路径保持不变，未合并到 C/T 业务库。</p>

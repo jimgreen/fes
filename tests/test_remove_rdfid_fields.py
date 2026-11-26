@@ -28,7 +28,7 @@ TABLES = (
 class RemoveRdfidFieldsTests(unittest.TestCase):
     def test_plan_apply_preserves_rows_and_removes_rdfid_from_every_table(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "scada.sqlite3"
+            db = Path(directory) / "scada.db"
             store = ScadaStore(db)
             store.create_row("fes_rtu_define", {
                 "rtu_id": 7, "channel_id": 70, "channel_type": "custom", "name": "测试站",

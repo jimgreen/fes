@@ -75,7 +75,7 @@ def main():
         row = dict(name=name, **timing, **details); results.append(row)
         print(json.dumps(dict(name=name, before_ms=timing['before']['median_ms'], after_ms=timing['after']['median_ms'], reduction_percent=timing['reduction_percent']), ensure_ascii=False), flush=True)
     with tempfile.TemporaryDirectory(prefix='scada-round3-') as tmp:
-        path = Path(tmp)/'scada.sqlite3'
+        path = Path(tmp)/'scada.db'
         after = ScadaStore(path, connection_pool_size=2)
         before = old_store(path, connection_pool_size=2)
         try:
@@ -99,7 +99,7 @@ def main():
         finally:
             before.close(); after.close()
 
-        con = sqlite3.connect(Path(tmp)/'runtime.sqlite3')
+        con = sqlite3.connect(Path(tmp)/'runtime.db')
         con.execute('PRAGMA journal_mode=WAL'); con.execute('PRAGMA synchronous=NORMAL')
         con.execute('CREATE TABLE fes_scdfe_t_point_define(channel_id INT,pnt_no INT,kind TEXT,value REAL,status INT,refresh_time INT,PRIMARY KEY(channel_id,pnt_no,kind))')
         con.executemany("INSERT INTO fes_scdfe_t_point_define VALUES(1,?,'yc',0,0,0)", [(n,) for n in range(1,2001)]); con.commit()

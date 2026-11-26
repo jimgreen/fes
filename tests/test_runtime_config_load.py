@@ -9,7 +9,7 @@ from scdfe_c.web.service import ScadaStore
 class RuntimeConfigLoadTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.store = ScadaStore(Path(self.temp.name) / "scada.sqlite3")
+        self.store = ScadaStore(Path(self.temp.name) / "scada.db")
         self.addCleanup(self.temp.cleanup)
 
     def test_bacnet_mapping_wins_over_default_without_wide_rows(self):

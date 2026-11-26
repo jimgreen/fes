@@ -10,7 +10,7 @@ from core.runtime_status import RuntimeStatusStore, runtime_status_rows
 class RuntimeStatusTest(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
-        self.store = ScadaStore(self.root / "scada.sqlite3")
+        self.store = ScadaStore(self.root / "scada.db")
         self.addCleanup(self.store.close)
 
     def test_upsert_is_throttled_and_diagnostic_is_decoded_for_readers(self):

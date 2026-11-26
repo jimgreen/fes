@@ -20,7 +20,7 @@ from core.iec104_protocol import parse_apdu
 class BatchReceiptTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
-        self.store = ScadaStore(Path(tmp.name)/'scada.sqlite3', connection_pool_size=1)
+        self.store = ScadaStore(Path(tmp.name)/'scada.db', connection_pool_size=1)
         self.addCleanup(self.store.close)
         self.sql = []
         with self.store.connection() as con:

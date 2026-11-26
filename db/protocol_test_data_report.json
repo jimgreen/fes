@@ -1,6 +1,6 @@
 {
-  "database": "D:\\codex\\scada\\db\\scada.sqlite3",
-  "backup": "D:\\codex\\scada\\db\\backups\\scada.sqlite3.before_protocol_test_data.20261101_074816_691282.4e12c747.bak",
+  "database": "D:\\codex\\scada\\db\\scada.db",
+  "backup": "D:\\codex\\scada\\db\\backups\\scada.db.before_protocol_test_data.20261101_074816_691282.4e12c747.bak",
   "added": {
     "fes_rtu_define": 54,
     "fes_yc_define": 54000,

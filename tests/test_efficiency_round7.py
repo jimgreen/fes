@@ -16,7 +16,7 @@ class MonitorBatchTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.httpd = make_server('127.0.0.1', 0, db_path=Path(temporary.name)/'s.sqlite3')
+        self.httpd = make_server('127.0.0.1', 0, db_path=Path(temporary.name)/'s.db')
         self.addCleanup(self.httpd.server_close)
         self.store = self.httpd.store
         for rid, protocol in [(1, 'iec104'), (2, 'modbus-tcp'), (3, 'can')]:

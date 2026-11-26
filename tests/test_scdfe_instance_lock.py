@@ -132,7 +132,7 @@ class RuntimeInstanceTests(unittest.TestCase):
         self.server = ModbusServer(host="127.0.0.1", port=0, no_block=True, data_bank=self.bank)
         self.server.start()
         self.addCleanup(self.server.stop)
-        self.stores = [ScadaStore(self.root / name) for name in ("first.sqlite3", "second.sqlite3")]
+        self.stores = [ScadaStore(self.root / name) for name in ("first.db", "second.db")]
         for store in self.stores:
             ensure_control_row(store)
             store.update_row(CONTROL_TABLE, [1], {

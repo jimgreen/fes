@@ -43,7 +43,7 @@ class CaptureQueue:
 
 
 def database_case(runtime, template, samples, messages, root, variant, stage, cycles, profile=None):
-    db = root / f'{variant}_{stage}.sqlite3'
+    db = root / f'{variant}_{stage}.db'
     with template.connection() as source, closing(sqlite3.connect(db)) as destination:
         source.backup(destination)
     store = ScadaStore(db)
@@ -149,7 +149,7 @@ def main():
                 path.write_bytes(source)
                 hashes[variant] = hashlib.sha256(source).hexdigest()
                 runtimes[variant] = load_runtime(path, hashes[variant])
-            template = ScadaStore(root / 'template.sqlite3')
+            template = ScadaStore(root / 'template.db')
             seed_protocol_test_data(template, replicas=1)
             spec = runtimes['before'].discover_channels(template)[0]
             stream = MeasurementStream(spec.rtu_id)

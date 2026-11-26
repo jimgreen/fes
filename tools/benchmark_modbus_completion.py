@@ -52,7 +52,7 @@ def main():
                   python=platform.python_version(), platform=platform.platform(),
                   boundary='Local temporary SQLite write path and loopback datastore publication; not hardware throughput.')
     with tempfile.TemporaryDirectory(prefix='modbus-commit-benchmark-') as directory:
-        store = ScadaStore(Path(directory) / 'scdfe_s.sqlite3')
+        store = ScadaStore(Path(directory) / 'scdfe_s.db')
         try:
             for rtu in range(1, 17):
                 store.create_row('fes_rtu_define', dict(rtu_id=rtu, channel_id=rtu, channel_type='modbus-tcp'))

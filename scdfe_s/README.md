@@ -39,12 +39,12 @@ RTU/通道及触发原因；HTTP 操作与通道生命周期日志使用同一�
 
 ## 独立数据库
 
-S 的 Web、IEC 104、Modbus TCP/RTU 和 CAN 命令行默认使用 `db/scdfe_s.sqlite3`。C 与 T 仍用 `db/scada.sqlite3`。两库可以复用 RTU 号、通道号和四遥点号；S 的增删改不会更新 C 的定义。两端交换值依靠实际规约连接。对照三个端口的 `/api/health`，S 还会显示 `database_role: simulator`。显式传入业务库会拒绝启动；C/T 也不能把 S 专库当成业务库。
+S 的 Web、IEC 104、Modbus TCP/RTU 和 CAN 命令行默认使用 `db/scdfe_s.db`。C 与 T 仍用 `db/scada.db`。两库可以复用 RTU 号、通道号和四遥点号；S 的增删改不会更新 C 的定义。两端交换值依靠实际规约连接。对照三个端口的 `/api/health`，S 还会显示 `database_role: simulator`。显式传入业务库会拒绝启动；C/T 也不能把 S 专库当成业务库。
 
 直接启动 S 会创建空专库。若要使用业务库中的通道和测点作为测试起点，在目标文件尚不存在时执行：
 
 ```text
-python -m scdfe_s.migrate --source db/scada.sqlite3 --destination db/scdfe_s.sqlite3
+python -m scdfe_s.migrate --source db/scada.db --destination db/scdfe_s.db
 ```
 
 工具从源库的只读快照复制 RTU、四遥定义及其显示值、规约参数和映射，不复制进程状态、待执行命令或 T 转发配置。未配置通道且没有关联数据的 RTU 会列在报告中；若有子记录则中止，目标文件已存在时拒绝覆盖。此后两库独立维护，不会同步定义。S 的规约配置和日志位于专库旁；报文保存策略持久化在 S 独立数据库的 fes_rtu_define.packet_recording 字段。
@@ -195,7 +195,7 @@ python -m scdfe_s.run_can_server --rtu-id 5 --mode server --simulation
 
 IEC104 覆盖链路控制、总召、变位/周期数据、SOE、遥控/遥调的选择、执行和确认；Modbus TCP 显示事务号、站号、功能码、0 基地址、数量/值和异常码。OPC UA 仅记录实际 TCP 片段及连接生命周期，不解密加密内容。串口、CAN 总线、UDP/BACnet 和本地模拟不会伪造 TCP 客户端。原始报文遵循通道“报文保存”开关，关闭后仍保留交互摘要和收发统计。
 
-连接观察异步批量写入业务库旁的 `<库名>.scdfe_s.connections.sqlite3`，不通过其他进程的内存交换。每连接保留最近 10000 条事件，离线历史保留 7 天；页面显示清理条数、队列丢失及写入错误。超过 20 秒没有记录进程心跳时显示“状态未知”，不会把进程异常退出误报成正常断开。此前没有连接编号的通道日志不能追溯拆分。
+连接观察异步批量写入业务库旁的 `<库名>.scdfe_s.connections.db`，不通过其他进程的内存交换。每连接保留最近 10000 条事件，离线历史保留 7 天；页面显示清理条数、队列丢失及写入错误。超过 20 秒没有记录进程心跳时显示“状态未知”，不会把进程异常退出误报成正常断开。此前没有连接编号的通道日志不能追溯拆分。
 
 查询接口：`GET /api/connections?rtu_id=2&limit=50&offset=0`、`GET /api/connections/<编号>`、`GET /api/connections/<编号>/events?kind=packet&before=<事件编号>&limit=100`。列表也支持 `channel_id` 和 `state=open|closed`；事件类型为 `packet|interaction|log`，单次最多 200 条。
 

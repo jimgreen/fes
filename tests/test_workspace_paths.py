@@ -50,7 +50,7 @@ class WorkspacePathsTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     default_database_path("c"),
-                    (root / "simulation" / "huashan" / "sqldb" / "fes" / "scdfe_c.sqlite3").resolve(),
+                    (root / "simulation" / "huashan" / "sqldb" / "fes" / "scdfe_c.db").resolve(),
                 )
                 self.assertEqual(
                     default_database_path("t"),
@@ -58,12 +58,12 @@ class WorkspacePathsTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     default_database_path("s"),
-                    (root / "simulation" / "huashan" / "sqldb" / "fes" / "scdfe_s.sqlite3").resolve(),
+                    (root / "simulation" / "huashan" / "sqldb" / "fes" / "scdfe_s.db").resolve(),
                 )
                 # 显式参数优先于环境变量
                 self.assertEqual(
                     default_database_path("c", root, "realtime", "qinling"),
-                    (root / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_c.sqlite3").resolve(),
+                    (root / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_c.db").resolve(),
                 )
 
     def test_validate_segment_rejects_traversal(self):
@@ -101,7 +101,7 @@ class WorkspacePathsTests(unittest.TestCase):
             self.assertEqual(ws_root, root.resolve())
             self.assertEqual(
                 db_path,
-                (root / "simulation" / "qinling" / "sqldb" / "fes" / "scdfe_c.sqlite3").resolve(),
+                (root / "simulation" / "qinling" / "sqldb" / "fes" / "scdfe_c.db").resolve(),
             )
             self.assertTrue(pref.is_relative_to(root.resolve()))
 
@@ -109,7 +109,7 @@ class WorkspacePathsTests(unittest.TestCase):
             _, cli_db = resolve_cli_database("s", None, workspace_root=root, runtime_name="realtime", scene_name="qinling")
             self.assertEqual(
                 cli_db,
-                (root / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_s.sqlite3").resolve(),
+                (root / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_s.db").resolve(),
             )
 
     def test_context_discovery_and_inference(self):
@@ -122,7 +122,7 @@ class WorkspacePathsTests(unittest.TestCase):
             self.assertEqual(list_scenes(root, "realtime"), ["qinling"])
             self.assertEqual(list_scenes(root, "simulation"), ["demo"])
             ctx = infer_workspace_context(
-                root / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_c.sqlite3",
+                root / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_c.db",
                 root,
             )
             self.assertEqual(ctx["runtime_name"], "realtime")
@@ -131,7 +131,7 @@ class WorkspacePathsTests(unittest.TestCase):
 
     def test_simulator_store_blocks_business_filename_in_new_workspace(self):
         with tempfile.TemporaryDirectory() as folder:
-            target = Path(folder) / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_c.sqlite3"
+            target = Path(folder) / "realtime" / "qinling" / "sqldb" / "fes" / "scdfe_c.db"
             with self.assertRaisesRegex(ValueError, "业务库"):
                 SimulatorStore(target)
 
@@ -146,8 +146,8 @@ class WorkspacePathsTests(unittest.TestCase):
             repo_dir.mkdir()
 
             # 准备源库（模拟旧仓库 db/ 布局与历史垃圾）
-            src_c = source_dir / "scada.sqlite3"
-            src_s = source_dir / "scdfe_s.sqlite3"
+            src_c = source_dir / "scada.db"
+            src_s = source_dir / "scdfe_s.db"
             with closing(ScadaStore(src_c)) as c_store:
                 c_store.create_row("fes_rtu_define", {"rtu_id": 1, "name": "秦岭1号", "channel_id": 1, "channel_type": "iec104"})
                 c_store.create_row("fes_channel_iec104_define", {"id": 1, "channel_id": 1, "rtu_addr": 1})
@@ -156,16 +156,16 @@ class WorkspacePathsTests(unittest.TestCase):
                 s_store.create_row("fes_rtu_define", {"rtu_id": 2, "name": "模拟站", "channel_id": 2, "channel_type": "iec104"})
                 s_store.create_row("fes_channel_iec104_define", {"id": 2, "channel_id": 2, "rtu_addr": 2})
 
-            (source_dir / "scada.sqlite3.old.bak").write_bytes(b"bak" * 100)
-            (source_dir / "scada.sqlite3.scdfe_c-main.lock").write_bytes(b"1")
+            (source_dir / "scada.db.old.bak").write_bytes(b"bak" * 100)
+            (source_dir / "scada.db.scdfe_c-main.lock").write_bytes(b"1")
             (source_dir / "web_database_c_123456.json").write_text("{}", encoding="utf-8")
-            (source_dir / "test_protocol_schema.sqlite3").write_bytes(b"old")
+            (source_dir / "test_protocol_schema.db").write_bytes(b"old")
             (repo_dir / ".tmp_junk.py").write_text("x = 1\n", encoding="utf-8")
 
             # 先在目标放一个已存在旧库，测试 --overwrite 备份覆盖
             target_dir = workspace_root / "realtime" / "qinling" / "sqldb" / "fes"
             target_dir.mkdir(parents=True)
-            with closing(ScadaStore(target_dir / "scdfe_c.sqlite3")) as old_dst:
+            with closing(ScadaStore(target_dir / "scdfe_c.db")) as old_dst:
                 old_dst.create_row("fes_rtu_define", {"rtu_id": 99, "name": "旧目标", "channel_id": 99, "channel_type": "iec104"})
 
             # 1) dry-run 不写入、不清理
@@ -181,7 +181,7 @@ class WorkspacePathsTests(unittest.TestCase):
             )
             self.assertEqual(dry["mode"], "dry_run")
             self.assertEqual(len(dry["databases"]), 2)
-            self.assertTrue((source_dir / "scada.sqlite3.old.bak").exists())
+            self.assertTrue((source_dir / "scada.db.old.bak").exists())
 
             # 2) apply 正式迁移 + 覆盖备份 + VACUUM + 清理遗留
             res = migrate_workspace_databases(
@@ -202,19 +202,19 @@ class WorkspacePathsTests(unittest.TestCase):
             self.assertIsNotNone(c_entry["backup"])
             self.assertTrue(Path(c_entry["backup"]).is_file())
 
-            with closing(ScadaStore(target_dir / "scdfe_c.sqlite3")) as migrated_c:
+            with closing(ScadaStore(target_dir / "scdfe_c.db")) as migrated_c:
                 self.assertEqual(migrated_c.get_row("fes_rtu_define", [1])["name"], "秦岭1号")
                 with migrated_c.connection() as con:
                     log_dir = con.execute("SELECT log_dir FROM fes_scdfe_c_define WHERE id=1").fetchone()[0]
                     self.assertEqual(log_dir, "logs")
 
-            with closing(SimulatorStore(target_dir / "scdfe_s.sqlite3")) as migrated_s:
+            with closing(SimulatorStore(target_dir / "scdfe_s.db")) as migrated_s:
                 self.assertEqual(migrated_s.get_row("fes_rtu_define", [2])["name"], "模拟站")
 
             # 旧垃圾均已清理
-            self.assertFalse((source_dir / "scada.sqlite3.old.bak").exists())
+            self.assertFalse((source_dir / "scada.db.old.bak").exists())
             self.assertFalse((source_dir / "web_database_c_123456.json").exists())
-            self.assertFalse((source_dir / "test_protocol_schema.sqlite3").exists())
+            self.assertFalse((source_dir / "test_protocol_schema.db").exists())
             self.assertFalse((repo_dir / ".tmp_junk.py").exists())
 
 

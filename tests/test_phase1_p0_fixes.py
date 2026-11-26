@@ -27,7 +27,7 @@ from server.point_store import coerce_value
 class Phase1P0RegressionTests(unittest.TestCase):
     def test_db01_create_channel_row_does_not_remap_primary_key_in_uncommitted_tx(self):
         with tempfile.TemporaryDirectory() as folder:
-            with closing(ScadaStore(Path(folder) / "c.sqlite3")) as store:
+            with closing(ScadaStore(Path(folder) / "c.db")) as store:
                 # RTU 1 拥有 channel_id=10；此时新建 channel_id=1（恰巧等于 RTU 1 的 rtu_id）
                 store.create_row("fes_rtu_define", {"rtu_id": 1, "name": "R1", "channel_id": 10, "channel_type": "modbus-tcp"})
                 created = store.create_row(
@@ -38,7 +38,7 @@ class Phase1P0RegressionTests(unittest.TestCase):
 
     def test_db03_db04_patch_enforces_iec104_and_can_validation_and_numeric_allowed_values(self):
         with tempfile.TemporaryDirectory() as folder:
-            with closing(ScadaStore(Path(folder) / "c.sqlite3")) as store:
+            with closing(ScadaStore(Path(folder) / "c.db")) as store:
                 store.create_row("fes_rtu_define", {"rtu_id": 1, "name": "R1", "channel_id": 1, "channel_type": "iec104"})
                 store.create_row("fes_channel_iec104_define", {"id": 1, "channel_id": 1, "rtu_addr": 1, "k": 12, "w": 8})
                 # PATCH 单改 w=20 > k=12 必须被拦截
@@ -65,7 +65,7 @@ class Phase1P0RegressionTests(unittest.TestCase):
     def test_db02_device_store_enables_wal_and_concurrent_pool(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            db_path = root / "scdfe_d.sqlite3"
+            db_path = root / "scdfe_d.db"
             with closing(DeviceStore(db_path, workspace_root=root, connection_pool_size=4)) as store:
                 with store.connection() as con1:
                     mode = con1.execute("PRAGMA journal_mode").fetchone()[0]
@@ -167,7 +167,7 @@ class Phase1P0RegressionTests(unittest.TestCase):
 
     def test_lg03_packet_logging_preserves_cache_on_transient_db_error_and_db_priority(self):
         with tempfile.TemporaryDirectory() as folder:
-            db_path = Path(folder) / "scdfe_c.sqlite3"
+            db_path = Path(folder) / "scdfe_c.db"
             with closing(ScadaStore(db_path)) as store:
                 store.create_row("fes_rtu_define", {"rtu_id": 1, "name": "R1", "channel_id": 1, "channel_type": "iec104"})
             switch = DatabasePacketLogSwitch(db_path, "c")

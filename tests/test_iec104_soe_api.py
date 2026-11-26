@@ -15,7 +15,7 @@ class SoeApiTests(unittest.TestCase):
     def test_all_components_support_bounded_keyset_queries(self):
         for component,maker in [('c',make_c),('s',make_s),('t',make_t)]:
             with self.subTest(component=component), tempfile.TemporaryDirectory() as directory:
-                server=maker('127.0.0.1',0,db_path=Path(directory)/'db.sqlite3')
+                server=maker('127.0.0.1',0,db_path=Path(directory)/'db.db')
                 thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
                 client=http.client.HTTPConnection('127.0.0.1',server.server_port,timeout=5)
                 try:

@@ -22,7 +22,7 @@ def copy_definitions(source, destination):
     # Publish only a closed and complete SQLite file. link() fails atomically
     # if another process created the target during the copy.
     with TemporaryDirectory(dir=destination.parent) as tmp:
-        staged = Path(tmp) / "scdfe_s.sqlite3"
+        staged = Path(tmp) / "scdfe_s.db"
         store = SimulatorStore(staged)
         counts = {}
         try:

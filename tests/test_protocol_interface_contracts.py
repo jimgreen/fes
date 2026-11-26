@@ -42,7 +42,7 @@ class RecordingWriter:
 class IEC104InterfaceContracts(unittest.TestCase):
     def fixture(self, stack, store_class=ScadaStore):
         root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix='scada-interface-')))
-        store = store_class(root / 'scdfe_s.sqlite3')
+        store = store_class(root / 'scdfe_s.db')
         stack.callback(store.close)
         store.create_row('fes_rtu_define', dict(rtu_id=1, channel_id=1, channel_type='iec104', process_enable=0))
         store.create_row('fes_channel_iec104_define', dict(id=1, channel_id=1, rtu_addr=1,
@@ -77,7 +77,7 @@ class IEC104InterfaceContracts(unittest.TestCase):
         with ExitStack() as stack:
             # T requires the business database name, independent of S fixtures.
             root = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix='scada-t-interface-')))
-            runtime = TransRuntime(root/'scada.sqlite3')
+            runtime = TransRuntime(root/'scada.db')
             stack.callback(runtime.store.close)
             writer = RecordingWriter(); runtime.writer = writer
             point = TransPoint.from_row(dict(channel_id=1, pnt_no=1, kind='yk', source_rtu_id=1,

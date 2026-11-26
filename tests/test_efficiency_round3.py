@@ -39,7 +39,7 @@ class BatchStoreTests(unittest.TestCase):
     def setUp(self):
         root = tempfile.TemporaryDirectory()
         self.addCleanup(root.cleanup)
-        self.store = ScadaStore(Path(root.name)/'scada.sqlite3', connection_pool_size=2)
+        self.store = ScadaStore(Path(root.name)/'scada.db', connection_pool_size=2)
         self.addCleanup(self.store.close)
         for rtu in (1, 2):
             self.store.create_row('fes_rtu_define', dict(rtu_id=rtu, channel_id=rtu, channel_type='iec104'))

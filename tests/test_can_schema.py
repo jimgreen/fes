@@ -15,7 +15,7 @@ from tools.migrate_can_schema import migrate
 class CanSchemaTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.db = Path(self.temp.name) / "scada.sqlite3"
+        self.db = Path(self.temp.name) / "scada.db"
         self.store = ScadaStore(self.db)
         self.store.create_row("fes_rtu_define", {
             "rtu_id": 7, "channel_id": 70, "channel_type": "can",
@@ -122,7 +122,7 @@ class CanSchemaTests(unittest.TestCase):
 
     def test_legacy_database_migration_is_backuped_and_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "legacy.sqlite3"
+            db = Path(directory) / "legacy.db"
             connection = sqlite3.connect(db)
             connection.executescript(
                 """

@@ -50,9 +50,9 @@ class ThreeWebInteractionTests(unittest.TestCase):
         self.channel_created = False
         self.addCleanup(self._cleanup)
         for name, factory, database in (
-            ("c", c_web, self.root / "system" / "scada.sqlite3"),
-            ("s", s_web, self.root / "source" / "scdfe_s.sqlite3"),
-            ("t", t_web, self.root / "system" / "scada.sqlite3"),
+            ("c", c_web, self.root / "system" / "scada.db"),
+            ("s", s_web, self.root / "source" / "scdfe_s.db"),
+            ("t", t_web, self.root / "system" / "scada.db"),
         ):
             web = self.webs[name] = factory(self.WEB_HOST, self.WEB_PORTS.get(name, 0), db_path=database)
             thread = threading.Thread(target=web.serve_forever, daemon=True)
@@ -337,7 +337,7 @@ class ThreeWebInteractionTests(unittest.TestCase):
                         if row["process_key"] == "main")
         self.control("command-server", "stop")
         self.control("command-server", "start")
-        command = CommandClient(self.root / "system" / "scada.sqlite3")
+        command = CommandClient(self.root / "system" / "scada.db")
         self.assertTrue(command.submit_command(self.RTUS[0], "yk", 1, 1)["ok"])
         self.handled(self.RTUS[0], "yk", 1)
         self.assertTrue(source.read_coils(2, count=1, device_id=1).bits[0])

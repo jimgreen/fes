@@ -49,7 +49,7 @@ def main():
     old_modbus = historical('server._round6_before', 'server/modbus_trans_server.py')
     results = []
     with tempfile.TemporaryDirectory(prefix='scada-round6-') as directory:
-        store = ScadaStore(Path(directory)/'test.sqlite3', connection_pool_size=1)
+        store = ScadaStore(Path(directory)/'test.db', connection_pool_size=1)
         try:
             with store.connection() as con:
                 con.executemany('INSERT INTO fes_channel_runtime_status(service_name,channel_id,state,diagnostic_json) VALUES(?,?,?,?)',

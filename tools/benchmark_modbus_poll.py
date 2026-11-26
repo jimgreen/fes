@@ -158,9 +158,9 @@ def collect_cycles(master, cycles):
 def pipeline(template, stations, classes, root, cycles, runtime_path, runtime_hash):
     runtime = load_runtime(runtime_path, runtime_hash)
     root.mkdir()
-    with template.connection() as source, closing(sqlite3.connect(root / 'scada.sqlite3')) as target:
+    with template.connection() as source, closing(sqlite3.connect(root / 'scada.db')) as target:
         source.backup(target)
-    store = ScadaStore(root / 'scada.sqlite3')
+    store = ScadaStore(root / 'scada.db')
     context = mp.get_context('spawn')
     queue = context.JoinableQueue(maxsize=64)
     ready = context.Event()
@@ -264,7 +264,7 @@ def main():
             runtime_path = root / 'scdfe_c' / '__init__.py'
             runtime_path.write_bytes((repo / 'scdfe_c' / '__init__.py').read_bytes())
             runtime_hash = hashlib.sha256(runtime_path.read_bytes()).hexdigest()
-            store = ScadaStore(root / 'template.sqlite3')
+            store = ScadaStore(root / 'template.db')
             seed_protocol_test_data(store, replicas=1)
             stations = station_inputs(store)
             for station in stations:

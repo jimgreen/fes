@@ -14,7 +14,7 @@ def backlog_benchmark():
     from scdfe_c.web.service import ScadaStore,SCHEMA_DIR
     from scdfe_c import _batch_writer_entry,BATCH_WRITER_STOP
     with tempfile.TemporaryDirectory(prefix='scada-aged-queue-') as directory:
-        root=Path(directory);data=ScadaStore(root/'db.sqlite3')
+        root=Path(directory);data=ScadaStore(root/'db.db')
         data.create_row('fes_rtu_define',dict(rtu_id=1,channel_type='iec104',channel_id=1))
         data.create_row('fes_yc_define',dict(rtu_id=1,pnt_no=1,value=0,status=0))
         ctx=mp.get_context('spawn');queue=ctx.JoinableQueue(100);ready=ctx.Event()
@@ -53,7 +53,7 @@ def main():
     from core.command_feedback import FeedbackTracker
     result=dict(root=str(args.root.resolve()),points=100,cycles=100,scope='configured feedback targets with no pending command; temporary DB; synthetic receive timestamps')
     with tempfile.TemporaryDirectory(prefix='scada-round13-') as directory:
-        data=ScadaStore(Path(directory)/'bench.sqlite3')
+        data=ScadaStore(Path(directory)/'bench.db')
         try:
             data.create_row('fes_rtu_define',dict(rtu_id=1,channel_type='iec104',channel_id=1))
             with data.connection() as con:

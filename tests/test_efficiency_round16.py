@@ -11,7 +11,7 @@ from scdfe_t.trans import TransRuntime
 
 @pytest.fixture
 def runtime(tmp_path):
-    runtime=TransRuntime(tmp_path/'test.sqlite3',channel_id=1)
+    runtime=TransRuntime(tmp_path/'test.db',channel_id=1)
     runtime.store.connection_pool_size=2
     with runtime.store.connection() as con:
         con.execute("INSERT INTO fes_rtu_define(rtu_id,channel_id,channel_type) VALUES(1,1,'iec104')")
@@ -147,7 +147,7 @@ def test_pending_snapshot_diagnostics_are_queryable_without_latency(tmp_path):
     import http.client,json
     from scdfe_t.web.server import make_server
     from core.runtime_status import RuntimeStatusStore
-    server=make_server('127.0.0.1',0,db_path=tmp_path/'api.sqlite3')
+    server=make_server('127.0.0.1',0,db_path=tmp_path/'api.db')
     stats=dict(pending_points=2,pending_age_ms=90,batches=5,rows=8,failures=1,lock_conflicts=1,
                log_unconfirmed=0,last_error='database is locked')
     RuntimeStatusStore(server.trans_store.store,'scdfe_t').upsert(1,dict(running=1,diagnostic_json={'point_runtime':stats}))

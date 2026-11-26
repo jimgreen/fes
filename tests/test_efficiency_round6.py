@@ -13,7 +13,7 @@ class DiagnosticSelectionTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.store = ScadaStore(Path(temporary.name)/'test.sqlite3', connection_pool_size=1)
+        self.store = ScadaStore(Path(temporary.name)/'test.db', connection_pool_size=1)
         self.addCleanup(self.store.close)
         with self.store.connection() as con:
             for role in ('scdfe_c', 'scdfe_s', 'scdfe_t'):

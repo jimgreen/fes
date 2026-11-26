@@ -18,7 +18,7 @@ class SpecialMappings(unittest.TestCase):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
         root = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
-        self.store = ScadaStore(root / 'scdfe_s.sqlite3')
+        self.store = ScadaStore(root / 'scdfe_s.db')
         self.stack.callback(self.store.close)
         self.store.create_row('fes_rtu_define', dict(rtu_id=1, channel_id=1, channel_type='modbus-tcp'))
         self.store.create_row('fes_channel_modbus_tcp_define', dict(channel_id=1, remote_host='127.0.0.1', remote_port=502, unit_id=1))

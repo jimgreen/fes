@@ -14,7 +14,7 @@ from scdfe_s.web.server import make_server, ScadaHandler
 
 @pytest.fixture
 def store(tmp_path):
-    data = ScadaStore(tmp_path/'status.sqlite3', connection_pool_size=2)
+    data = ScadaStore(tmp_path/'status.db', connection_pool_size=2)
     yield data
     data.close()
 
@@ -89,7 +89,7 @@ def test_older_concurrent_capture_cannot_overwrite_newer_state(store):
 
 @pytest.fixture
 def monitor(tmp_path):
-    server = make_server('127.0.0.1', 0, db_path=tmp_path/'s.sqlite3')
+    server = make_server('127.0.0.1', 0, db_path=tmp_path/'s.db')
     for n, protocol in enumerate(('iec104', 'modbus-tcp', 'can'), 1):
         server.store.create_row('fes_rtu_define', dict(rtu_id=n, channel_id=n,
             channel_type=protocol, name=f'站{n}'))

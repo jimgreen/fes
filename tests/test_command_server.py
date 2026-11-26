@@ -49,7 +49,7 @@ def request(address, token, payload):
 class CommandServerTests(unittest.TestCase):
     def test_managed_process_registers_heartbeats_and_cleans_up(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = Path(tmp) / "scada.sqlite3"
+            db = Path(tmp) / "scada.db"
             store = ScadaStore(db)
             store.create_row(COMMAND_TABLE, {
                 "id": 1, "bind_host": "127.0.0.1", "bind_port": 0,
@@ -102,7 +102,7 @@ class CommandServerTests(unittest.TestCase):
     def test_managed_process_uses_shared_web_log_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            db = root / "scada.sqlite3"
+            db = root / "scada.db"
             store = ScadaStore(db)
             control = ensure_control_row(store)
             custom_logs = root / "configured-logs"
@@ -141,7 +141,7 @@ class CommandServerTests(unittest.TestCase):
     def test_yk_and_yt_are_forwarded_after_writer_ack(self):
         with tempfile.TemporaryDirectory() as tmp:
             writer = FakeWriter()
-            server = CommandServer(Path(tmp) / "scada.sqlite3", port=0, token="test-token", writer=writer)
+            server = CommandServer(Path(tmp) / "scada.db", port=0, token="test-token", writer=writer)
             server.start()
             self.addCleanup(server.close)
             address = server.address
@@ -161,7 +161,7 @@ class CommandServerTests(unittest.TestCase):
     def test_request_id_is_idempotent_and_token_is_required(self):
         with tempfile.TemporaryDirectory() as tmp:
             writer = FakeWriter()
-            server = CommandServer(Path(tmp) / "scada.sqlite3", port=0, token="test-token", writer=writer)
+            server = CommandServer(Path(tmp) / "scada.db", port=0, token="test-token", writer=writer)
             server.start()
             self.addCleanup(server.close)
             address = server.address
@@ -184,7 +184,7 @@ class CommandServerTests(unittest.TestCase):
     def test_invalid_command_is_rejected_without_writer_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             writer = FakeWriter()
-            server = CommandServer(Path(tmp) / "scada.sqlite3", port=0, token="test-token", writer=writer)
+            server = CommandServer(Path(tmp) / "scada.db", port=0, token="test-token", writer=writer)
             server.start()
             self.addCleanup(server.close)
             address = server.address
@@ -203,7 +203,7 @@ class CommandServerTests(unittest.TestCase):
 
     def test_command_client_discovers_endpoint_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = Path(tmp) / "scada.sqlite3"
+            db = Path(tmp) / "scada.db"
             writer = FakeWriter()
             server = CommandServer(db, port=0, token="test-token", writer=writer)
             server.start()
@@ -214,7 +214,7 @@ class CommandServerTests(unittest.TestCase):
 
     def test_endpoint_metadata_is_written_and_removed(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = Path(tmp) / "scada.sqlite3"
+            db = Path(tmp) / "scada.db"
             server = CommandServer(db, port=0, token="test-token", writer=FakeWriter())
             server.start()
             metadata = endpoint_path(db)
@@ -225,7 +225,7 @@ class CommandServerTests(unittest.TestCase):
 
     def test_start_failure_is_written_to_runtime_log(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = Path(tmp) / "scada.sqlite3"
+            db = Path(tmp) / "scada.db"
             listener = socket.socket()
             listener.bind(("127.0.0.1", 0))
             listener.listen()
@@ -244,7 +244,7 @@ class CommandServerTests(unittest.TestCase):
     def test_concurrent_duplicate_request_id_is_submitted_once(self):
         with tempfile.TemporaryDirectory() as tmp:
             writer = SlowWriter()
-            server = CommandServer(Path(tmp) / "scada.sqlite3", port=0, token="test-token",
+            server = CommandServer(Path(tmp) / "scada.db", port=0, token="test-token",
                                     writer=writer, request_timeout=2)
             server.start()
             self.addCleanup(server.close)
@@ -268,7 +268,7 @@ class CommandServerTests(unittest.TestCase):
 
     def test_idle_client_is_closed_after_request_timeout(self):
         with tempfile.TemporaryDirectory() as tmp:
-            server = CommandServer(Path(tmp) / "scada.sqlite3", port=0, token="test-token",
+            server = CommandServer(Path(tmp) / "scada.db", port=0, token="test-token",
                                     writer=FakeWriter(), request_timeout=0.1)
             server.start()
             self.addCleanup(server.close)

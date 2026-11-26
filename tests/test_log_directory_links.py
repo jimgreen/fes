@@ -48,7 +48,7 @@ class DirectoryLinkTests(unittest.TestCase):
                 with self.assertRaisesRegex(OSError, "日志目录"):
                     ScdfeLogger(root, process_name="scdfe_c-main").normal("must stay inside")
                 self.assertFalse(any(p.is_dir() for p in outside.iterdir()))
-                stub = SimpleNamespace(db_path=base / "scada.sqlite3")
+                stub = SimpleNamespace(db_path=base / "scada.db")
                 s = ServiceFileLog(stub, "iec104")
                 self.assertEqual(s.recent(), [])
                 self.assertEqual(s.startup_catalog(root), {})

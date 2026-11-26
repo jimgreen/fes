@@ -22,7 +22,7 @@ class ProcessMonitorTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.store = ScadaStore(self.root / "scada.sqlite3")
+        self.store = ScadaStore(self.root / "scada.db")
         ensure_control_row(self.store)
         self.store.update_row(CONTROL_TABLE, [1], {
             "process_enable": 0, "scan_interval_ms": 100,

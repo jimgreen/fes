@@ -21,7 +21,7 @@ def main():
     cases=[]
     with tempfile.TemporaryDirectory(prefix='scada-round17-') as directory:
         for size in (1,64):
-            server=make_server('127.0.0.1',0,db_path=Path(directory)/f'{size}.sqlite3')
+            server=make_server('127.0.0.1',0,db_path=Path(directory)/f'{size}.db')
             try:
                 with server.store.connection() as con:
                     con.execute('BEGIN')

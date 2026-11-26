@@ -6,7 +6,7 @@ from scdfe_c.web.service import ScadaStore
 
 @pytest.fixture
 def store(tmp_path):
-    result=ScadaStore(tmp_path/'data.sqlite3')
+    result=ScadaStore(tmp_path/'data.db')
     result.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='iec104'))
     for kind in ('yc','yx','yk','yt'):
         result.create_row(f'fes_{kind}_define',dict(rtu_id=1,pnt_no=1,value=0,status=0))
@@ -52,7 +52,7 @@ def test_delta_dense_and_sparse_preserve_unmapped_and_deletion_boundaries(store)
 
 def test_simulator_preserves_commands_received_in_the_same_millisecond(tmp_path):
     from scdfe_s.database import SimulatorStore
-    data=SimulatorStore(tmp_path/'simulator.sqlite3')
+    data=SimulatorStore(tmp_path/'simulator.db')
     try:
         data.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='iec104'))
         data.create_row('fes_yk_define',dict(rtu_id=1,pnt_no=1,value=0))
@@ -143,7 +143,7 @@ def test_slow_soe_client_does_not_block_fast_client_and_reconnect_replays_gap(tm
     from server.iec104_server import IEC104Server
     from client.iec104 import IEC104Master
     with ExitStack() as stack:
-        data=SimulatorStore(tmp_path/'s.sqlite3');stack.callback(data.close);fill_one(data,2404)
+        data=SimulatorStore(tmp_path/'s.db');stack.callback(data.close);fill_one(data,2404)
         with data.connection() as con:
             con.execute('BEGIN')
             for n in range(384):con.execute('UPDATE fes_yx_define SET value=? WHERE rtu_id=1 AND pnt_no=1',((n+1)%2,))
@@ -191,7 +191,7 @@ def test_command_trace_http_pagination_and_read_only(tmp_path,component):
     import threading,http.client,json
     from importlib import import_module
     from core.command_store import DatabaseCommandWriter
-    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'web.sqlite3')
+    server=import_module(f'scdfe_{component}.web.server').make_server('127.0.0.1',0,db_path=tmp_path/'web.db')
     data=server.trans_store.store if component=='t' else server.store
     data.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='iec104',name='追踪测试站'))
     data.create_row('fes_yk_define',dict(rtu_id=1,pnt_no=1,value=0))

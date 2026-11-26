@@ -134,8 +134,8 @@ def pipeline(channels, points, rounds, output):
     wires = []
     with tempfile.TemporaryDirectory(prefix='iec104-pipeline-') as directory, ExitStack() as stack:
         root = Path(directory)
-        s = SimulatorStore(root/'scdfe_s.sqlite3', connection_pool_size=2)
-        c = ScadaStore(root/'scada.sqlite3', connection_pool_size=2)
+        s = SimulatorStore(root/'scdfe_s.db', connection_pool_size=2)
+        c = ScadaStore(root/'scada.db', connection_pool_size=2)
         stack.callback(s.close); stack.callback(c.close)
         s_ports, t_ports = [port() for _ in range(channels)], [port() for _ in range(channels)]
         fill(s, channels, points, s_ports, initial=True)

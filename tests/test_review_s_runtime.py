@@ -24,7 +24,7 @@ class ReviewProtocolServicesTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.store = ScadaStore(Path(self.tmp.name) / "review.sqlite3")
+        self.store = ScadaStore(Path(self.tmp.name) / "review.db")
 
     def modbus(self, protocol="modbus-tcp", *, port=1503, unit=5):
         self.store.create_row("fes_rtu_define", {

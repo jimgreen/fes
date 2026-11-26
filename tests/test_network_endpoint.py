@@ -25,7 +25,7 @@ class NetworkEndpointTests(unittest.TestCase):
 
     def test_typed_channel_binding_is_batched_and_survives_reopen(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "test.sqlite3"
+            path = Path(directory) / "test.db"
             store = ScadaStore(path)
             try:
                 store.create_row("fes_channel_iec104_define", {

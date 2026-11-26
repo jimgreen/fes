@@ -22,7 +22,7 @@ class TransWebReviewTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         # HTTP servers release their idle SQLite handles before directory cleanup.
         self.addCleanup(self.temp.cleanup)
-        self.db = Path(self.temp.name) / "review.sqlite3"
+        self.db = Path(self.temp.name) / "review.db"
         self.service = TransStore(self.db)
         self.channel = self.service.create_channel({
             "channel_id": 1, "name": "REVIEW", "protocol": "modbus-tcp",

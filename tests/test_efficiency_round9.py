@@ -12,7 +12,7 @@ from core.connection_history import ConnectionJournal, history_path, read_histor
 
 @pytest.fixture
 def store(tmp_path):
-    value = ScadaStore(tmp_path / 'data.sqlite3')
+    value = ScadaStore(tmp_path / 'data.db')
     for rid in (1, 2):
         value.create_row('fes_rtu_define', dict(rtu_id=rid, channel_id=rid, channel_type='iec104'))
         for kind in ('yc', 'yx'):
@@ -128,7 +128,7 @@ def test_monitor_coalescing_does_not_coalesce_soe(tmp_path):
     from scdfe_s.database import SimulatorStore
     from core.monitor_changes import ensure_monitor_changes, read_monitor_changes
     from tools.verify_iec104_soe import fill_one
-    store = SimulatorStore(tmp_path / 'simulator.sqlite3')
+    store = SimulatorStore(tmp_path / 'simulator.db')
     try:
         fill_one(store, 2404)
         with store.connection() as con:
@@ -148,7 +148,7 @@ def test_monitor_coalescing_does_not_coalesce_soe(tmp_path):
 
 
 def test_connection_after_cursor_drains_oldest_unseen_first_without_gaps(tmp_path):
-    db = tmp_path / 'data.sqlite3'
+    db = tmp_path / 'data.db'
     writer = ConnectionJournal(history_path(db, 's'))
     try:
         ident = writer.open(dict(service='scdfe_s', protocol='IEC104', channel_id=1, rtu_id=1), 'peer', 'local')

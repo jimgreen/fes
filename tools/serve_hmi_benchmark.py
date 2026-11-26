@@ -29,7 +29,7 @@ def main():
     # Keep generated database/log data in the repository's disposable output.
     root.relative_to(repo / 'output')
     root.mkdir(parents=True, exist_ok=True)
-    db = root / 'fixture.sqlite3'
+    db = root / 'fixture.db'
     store = ScadaStore(db)
     seed_protocol_test_data(store, replicas=10)
     with store.connection() as connection:

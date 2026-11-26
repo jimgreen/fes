@@ -182,7 +182,7 @@ def test_invalid_mbap_disconnects_only_its_peer(pid,size):
 def test_s_simulator_slow_database_commit_leaves_reads_live_and_sync_current(tmp_path):
     from scdfe_c.web.service import ScadaStore
     from server.modbus_mapped_server import ModbusMappedServer
-    store=ScadaStore(tmp_path/'sim.sqlite3')
+    store=ScadaStore(tmp_path/'sim.db')
     with store.connection() as con:
         con.execute("INSERT INTO fes_rtu_define(rtu_id,channel_id,channel_type) VALUES(1,1,'modbus-tcp')")
         con.execute('INSERT INTO fes_yc_define(rtu_id,pnt_no,value) VALUES(1,1,7)')
@@ -244,7 +244,7 @@ def test_request_metrics_exposed_without_other_timing_samples(tmp_path,nested):
     import http.client,json
     from scdfe_t.web.server import make_server
     from core.runtime_status import RuntimeStatusStore
-    server=make_server('127.0.0.1',0,db_path=tmp_path/'api.sqlite3')
+    server=make_server('127.0.0.1',0,db_path=tmp_path/'api.db')
     metrics=dict(pending=0,peak=3,busy=1,recent=[dict(transaction_id=9)])
     diagnostic={'modbus_requests':metrics}
     if nested:diagnostic={'engine':diagnostic}

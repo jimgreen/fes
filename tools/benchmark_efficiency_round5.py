@@ -38,7 +38,7 @@ def main():
     old_runtime=helpers.old_module('scdfe_t._round5_before','scdfe_t/trans.py').TransRuntime
     results=[]
     with tempfile.TemporaryDirectory(prefix='scada-round5-') as tmp:
-        path=Path(tmp)/'mapping.sqlite3'
+        path=Path(tmp)/'mapping.db'
         after=TransStore(path,connection_pool_size=1);before=old_store(path,connection_pool_size=1)
         try:
             after.create_channel(dict(channel_id=1,protocol='iec104',bind_host='127.0.0.1',bind_port=25444))
@@ -69,7 +69,7 @@ def main():
         finally:before.store.close();after.store.close()
 
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
-        path=Path(tmp)/'wire.sqlite3';store=TransStore(path,connection_pool_size=1)
+        path=Path(tmp)/'wire.db';store=TransStore(path,connection_pool_size=1)
         runtimes=[];client=None;server=None
         try:
             store.create_channel(dict(channel_id=1,protocol='iec104',bind_host='127.0.0.1',bind_port=port))

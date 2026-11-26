@@ -18,6 +18,10 @@ db/*.scdfe_writer.json
 db/*.scdfe_command.json
 db/iec104_server_config.json
 db/modbus_tcp_server_service_config.json
+db/scdfe_s.db
+db/*.db-wal
+db/*.db-shm
+db/*.connections.db
 db/scdfe_s.sqlite3
 db/*.sqlite3-wal
 db/*.sqlite3-shm

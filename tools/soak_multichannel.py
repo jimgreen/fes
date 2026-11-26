@@ -133,7 +133,7 @@ def run(minutes,out):
                     count(f'wire_{cid}');return
                 time.sleep(.025)
             raise AssertionError((cid,seq,expected,actual))
-        db=fixture.root/'system/scada.sqlite3'
+        db=fixture.root/'system/scada.db'
         (out/'ports.json').write_text(json.dumps(dict(web=urls,root=str(fixture.root),t_pids=started)),encoding='utf8')
         # Let the policy reach every process and prime log filters before sampling.
         clients[1].read_input_registers(0,count=2,device_id=1)

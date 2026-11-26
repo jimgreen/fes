@@ -16,7 +16,7 @@ from tests.test_protocol_interface_contracts import eventually
 class CanScheduleContracts(unittest.TestCase):
     def fixture(self, stack):
         root = Path(stack.enter_context(tempfile.TemporaryDirectory()))
-        store = ScadaStore(root/'scdfe_s.sqlite3'); stack.callback(store.close)
+        store = ScadaStore(root/'scdfe_s.db'); stack.callback(store.close)
         channel = 'schedule-'+uuid.uuid4().hex
         store.create_row('fes_rtu_define',dict(rtu_id=1,channel_id=1,channel_type='can'))
         store.create_row('fes_channel_can_define',dict(channel_id=1,interface='virtual',channel=channel))

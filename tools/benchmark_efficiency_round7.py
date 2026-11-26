@@ -29,7 +29,7 @@ def main():
     results = []
     for count in (1, 60, 300):
         with tempfile.TemporaryDirectory(prefix='scada-monitor-') as temporary:
-            server = make_server('127.0.0.1', 0, db_path=Path(temporary)/'s.sqlite3')
+            server = make_server('127.0.0.1', 0, db_path=Path(temporary)/'s.db')
             store = server.store
             with store.connection() as con:
                 con.executemany('INSERT INTO fes_rtu_define(rtu_id,channel_id,channel_type,name) VALUES(?,?,?,?)',

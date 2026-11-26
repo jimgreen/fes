@@ -142,7 +142,7 @@ class MasterStoreTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.store = ScadaStore(Path(self.temp.name) / 'scada.sqlite3')
+        self.store = ScadaStore(Path(self.temp.name) / 'scada.db')
         self.store.create_row('fes_rtu_define', {
             'rtu_id': 7, 'channel_id': 70, 'channel_type': 'modbus-tcp',
                     })

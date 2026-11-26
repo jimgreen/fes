@@ -132,7 +132,7 @@ Set-Location D:\codex\scada
 或运行 `scdfe_c\web\start.bat`。Linux/macOS 使用 `sh scdfe_c/web/start.sh`。
 
 浏览器打开 `http://127.0.0.1:8877/`，接口文档为 `/api-docs`。数据库默认使用
-`D:\codex\scada\db\scada.sqlite3`，表结构来自 `D:\codex\scada\dbdef\json`。
+`D:\codex\scada\db\scada.db`，表结构来自 `D:\codex\scada\dbdef\json`。
 
 ## 管理范围
 

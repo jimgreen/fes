@@ -77,7 +77,7 @@ class ModbusAddressBaseTests(unittest.TestCase):
 
     def test_old_database_migration_adds_columns_and_is_idempotent(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = Path(directory) / "legacy.sqlite3"
+            db = Path(directory) / "legacy.db"
             con = sqlite3.connect(db)
             tables = (
                 "fes_channel_modbus_define",

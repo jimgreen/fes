@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS connection_writer (
 
 def history_path(db_path, component):
     path = Path(db_path)
-    return path.with_name(f'{path.stem}.scdfe_{component}.connections.sqlite3')
+    return path.with_name(f'{path.stem}.scdfe_{component}.connections.db')
 
 
 def endpoint(address):

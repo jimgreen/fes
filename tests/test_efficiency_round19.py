@@ -188,7 +188,7 @@ class EfficiencyRound19Tests(unittest.TestCase):
 
     def test_packet_recording_state_single_connection_no_n_plus_1(self):
         root = self._temp_root()
-        db = root / "scada.sqlite3"
+        db = root / "scada.db"
         store = ScadaStore(db, SCHEMA_DIR)
         self.addCleanup(store.close)
         for idx in range(1, 21):
@@ -208,28 +208,28 @@ class EfficiencyRound19Tests(unittest.TestCase):
             connect_calls += 1
             return real_connect(*args, **kwargs)
 
-        with patch("core.packet_logging.sqlite3.connect", side_effect=counting_connect):
+        with patch("core.packet_logging.db.connect", side_effect=counting_connect):
             state = packet_recording_state(db, "c")
         self.assertEqual(len(state["channels"]), 20)
         self.assertEqual(connect_calls, 1)
 
         switch = DatabasePacketLogSwitch(db, "c")
         connect_calls = 0
-        with patch("core.packet_logging.sqlite3.connect", side_effect=counting_connect):
+        with patch("core.packet_logging.db.connect", side_effect=counting_connect):
             results = [switch.enabled(idx) for idx in range(1, 21)]
         self.assertEqual(connect_calls, 1)
         self.assertEqual(results, [bool(idx % 2) for idx in range(1, 21)])
 
     def test_scdfe_d_indexes_pooling_and_source_connection_reuse(self):
         root = self._temp_root()
-        src_db = root / "scada.sqlite3"
+        src_db = root / "scada.db"
         scada = ScadaStore(src_db, SCHEMA_DIR)
         self.addCleanup(scada.close)
         scada.create_row("fes_rtu_define", {"rtu_id": 1, "channel_id": 1, "name": "R1", "channel_type": "iec104"})
         now = int(time.time() * 1000)
         scada.create_row("fes_yc_define", {"rtu_id": 1, "pnt_no": 1, "name": "P", "value": 42.5, "status": 0, "refresh_time": now})
 
-        dev_db = root / "device.sqlite3"
+        dev_db = root / "device.db"
         store = DeviceStore(dev_db, workspace_root=root, connection_pool_size=2)
         self.addCleanup(store.close)
         with store.connection() as con:
@@ -248,7 +248,7 @@ class EfficiencyRound19Tests(unittest.TestCase):
             "device_id": device["device_id"],
             "metric": "p",
             "kind": "yc",
-            "source_database": "scada.sqlite3",
+            "source_database": "scada.db",
             "rtu_id": 1,
             "pnt_no": 1,
             "enabled": 1,
@@ -260,12 +260,12 @@ class EfficiencyRound19Tests(unittest.TestCase):
 
         def count_source_connect(database, *args, **kwargs):
             nonlocal source_opens
-            if isinstance(database, str) and "scada.sqlite3" in database:
+            if isinstance(database, str) and "scada.db" in database:
                 source_opens += 1
             return real_connect(database, *args, **kwargs)
 
         try:
-            with patch("scdfe_d.service.sqlite3.connect", side_effect=count_source_connect):
+            with patch("scdfe_d.service.db.connect", side_effect=count_source_connect):
                 r1 = store.collect_once(_source_cache=source_cache)
                 r2 = store.collect_once(_source_cache=source_cache)
             self.assertEqual(source_opens, 1)
@@ -277,10 +277,10 @@ class EfficiencyRound19Tests(unittest.TestCase):
 
     def test_web_gzip_and_static_etag_across_all_four_servers(self):
         root = self._temp_root()
-        c_db = root / "c.sqlite3"
-        s_db = root / "s.sqlite3"
-        t_db = root / "t.sqlite3"
-        d_db = root / "d.sqlite3"
+        c_db = root / "c.db"
+        s_db = root / "s.db"
+        t_db = root / "t.db"
+        d_db = root / "d.db"
 
         servers = [
             ("c", CWebServer(("127.0.0.1", 0), db_path=c_db, schema_dir=SCHEMA_DIR, workspace_root=root), "/static/app.js", "/api/schemas"),

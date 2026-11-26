@@ -19,7 +19,7 @@ class ReviewRuntimeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.store = ScadaStore(self.root / 'review.sqlite3')
+        self.store = ScadaStore(self.root / 'review.db')
 
     def supervisor(self):
         return runtime.ScdfeSupervisor(self.store.db_path, log_dir=self.root / 'logs',

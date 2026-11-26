@@ -14,7 +14,7 @@ def main():
     from core.command_store import DatabaseCommandWriter
     result=dict(cases=[],passed=False)
     with tempfile.TemporaryDirectory(prefix='commands-round14-') as tmp:
-        store=ScadaStore(Path(tmp)/'scada.sqlite3',connection_pool_size=2)
+        store=ScadaStore(Path(tmp)/'scada.db',connection_pool_size=2)
         try:
             with store.connection() as con:
                 con.execute('BEGIN')

@@ -24,7 +24,7 @@ from server.modbus_trans_server import ModbusTcpTransServer
 class Phase2P1RegressionTests(unittest.TestCase):
     def test_fast_schema_ready_skips_write_lock_for_initialized_store(self):
         with tempfile.TemporaryDirectory() as folder:
-            db_path = Path(folder) / "scdfe_c.sqlite3"
+            db_path = Path(folder) / "scdfe_c.db"
             with closing(ScadaStore(db_path)):
                 pass
             # 第二次构造已有完好库应命中 _fast_schema_ready 快路径，零写锁完成初始化
@@ -34,7 +34,7 @@ class Phase2P1RegressionTests(unittest.TestCase):
 
     def test_monitor_changes_uses_begin_immediate_outside_transaction(self):
         with tempfile.TemporaryDirectory() as folder:
-            db_path = Path(folder) / "scdfe_c.sqlite3"
+            db_path = Path(folder) / "scdfe_c.db"
             with closing(ScadaStore(db_path)) as store:
                 with store.connection() as con:
                     self.assertFalse(con.in_transaction)
@@ -47,8 +47,8 @@ class Phase2P1RegressionTests(unittest.TestCase):
 
     def test_s_migrate_excludes_runtime_status_and_can_diagnostic(self):
         with tempfile.TemporaryDirectory() as folder:
-            src = Path(folder) / "src.sqlite3"
-            dst = Path(folder) / "dst_s.sqlite3"
+            src = Path(folder) / "src.db"
+            dst = Path(folder) / "dst_s.db"
             with closing(ScadaStore(src)) as c:
                 c.create_row("fes_rtu_define", {"rtu_id": 1, "name": "R1", "channel_id": 1, "channel_type": "iec104"})
                 with c.connection() as con:

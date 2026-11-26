@@ -28,13 +28,13 @@ class SchemaIntTypeTests(unittest.TestCase):
                      *sorted((ROOT / "dbdef").glob("*.dbdef"))]:
             self.assertIsNone(LEGACY_TOKEN.search(path.read_text(encoding="utf-8")), path)
 
-        migration = plan(ROOT, ROOT / "db" / "scada.sqlite3")
+        migration = plan(ROOT, ROOT / "db" / "scada.db")
         self.assertEqual(migration["long_count"], 0)
         self.assertFalse(migration["changed"])
 
     def test_integer_metadata_maps_to_integer_sqlite_columns(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = ScadaStore(Path(directory) / "schema.sqlite3")
+            store = ScadaStore(Path(directory) / "schema.db")
             self.addCleanup(store.close)
             with store.connection() as connection:
                 for table in store.catalog.names():
