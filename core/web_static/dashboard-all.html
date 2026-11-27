@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="minimalist-light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>三端合屏 · 全域实时态势大屏 · SCADA</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/ui-theme.css">
+  <script defer src="/static/dashboard.js"></script>
+</head>
+<body data-dashboard="1" data-dash-role="all">
+  <header><strong>SCADA · 三端合屏总览大屏</strong><a href="/">返回工作台</a></header>
+  <main>
+    <section class="dash-root" id="dash-root" aria-label="全域三端融合态势总控大屏">
+      <!-- 顶部单行全域指挥条 -->
+      <div class="dash-strip">
+        <div class="dash-strip-title">
+          <span class="dash-live-dot" id="dash-live-dot" aria-hidden="true"></span>
+          <strong id="dash-theme-title">全域三端融合态势大屏</strong>
+          <span class="dash-role-tag" id="dash-role-tag">S · C · T 全景</span>
+        </div>
+        <div class="dash-kpis" id="dash-kpis" aria-label="三端核心指标"></div>
+        <div class="dash-controls">
+          <span class="dash-clock" id="dash-clock">--:--:--</span>
+          <select id="dash-interval" class="dash-select" aria-label="刷新周期">
+            <option value="2000" selected>2s</option>
+            <option value="5000">5s</option>
+            <option value="10000">10s</option>
+            <option value="0">暂停</option>
+          </select>
+          <a href="/dashboard" class="dash-btn" title="切回当前端专属大屏">单端大屏</a>
+          <button type="button" id="dash-refresh" class="dash-btn" title="立即刷新 (Alt+R)">刷新</button>
+          <button type="button" id="dash-fullscreen" class="dash-btn is-accent" title="切换大屏沉浸模式 (F)">大屏模式</button>
+        </div>
+      </div>
+
+      <!-- 全域融合大屏专属布局：上全宽端到端脉冲总线+同心三环仪 / 下三端并列专属矩阵 -->
+      <div class="dash-layout-all">
+        <div class="dash-all-top">
+          <!-- 上左主视觉（72%）：S -> C -> T 全域脉冲数据总线拓扑 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>S → C → T 全域实时数据总线拓扑</h2>
+              <span class="dash-card-meta" id="dash-all-bus-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-topo-wrap" id="dash-all-bus-host"></div>
+          </article>
+
+          <!-- 上右（28%）：三端同心三环综合健康仪 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>三端同心综合健康仪</h2>
+              <span class="dash-card-meta" id="dash-all-ring-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-gauge-wrap">
+              <div class="dash-gauge-svg-host" id="dash-all-ring-svg"></div>
+              <div class="dash-gauge-stats" id="dash-all-svc-pills"></div>
+            </div>
+          </article>
+        </div>
+
+        <!-- 下排三柱矩阵：一端一柱，各展核心绝活并一键穿透单端大屏 -->
+        <div class="dash-all-bottom">
+          <!-- 左柱：仿真端 scdfe_s -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>仿真端 scdfe_s · 示波与点阵</h2>
+              <a class="dash-card-link" id="dash-all-link-s" href="/dashboard">仿真大屏 ↗</a>
+            </div>
+            <div class="dash-card-body dash-all-col-body">
+              <div class="dash-canvas-wrap dash-all-mini-canvas">
+                <canvas id="dash-scope-canvas" class="dash-canvas"></canvas>
+              </div>
+              <div class="dash-all-sub-block" id="dash-all-s-summary"></div>
+            </div>
+          </article>
+
+          <!-- 中柱：采集端 scdfe_c -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>采集端 scdfe_c · 吞吐与四遥</h2>
+              <a class="dash-card-link" id="dash-all-link-c" href="/dashboard">采集大屏 ↗</a>
+            </div>
+            <div class="dash-card-body dash-all-col-body">
+              <div class="dash-canvas-wrap dash-all-mini-canvas">
+                <canvas id="dash-trend-canvas" class="dash-canvas"></canvas>
+                <div id="dash-trend-tip" class="dash-tooltip" hidden></div>
+              </div>
+              <div class="dash-hbar-wrap dash-all-sub-bars" id="dash-all-c-bars"></div>
+            </div>
+          </article>
+
+          <!-- 右柱：转发端 scdfe_t + 全域融合动态流 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>转发端 scdfe_t · 保真与全域动态</h2>
+              <a class="dash-card-link" id="dash-all-link-t" href="/dashboard">转发大屏 ↗</a>
+            </div>
+            <div class="dash-card-body dash-feed-wrap">
+              <div class="dash-shield-banner" id="dash-shield-banner"></div>
+              <div class="dash-hbar-wrap dash-all-t-bars" id="dash-all-t-bars"></div>
+              <div class="dash-feed-list" id="dash-feed-list"></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

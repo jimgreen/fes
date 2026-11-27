@@ -102,6 +102,23 @@ class ThreeWebDashboardTests(unittest.TestCase):
                 self.assertTrue(0 <= data["health_score"] <= 100)
                 for key in ("kpis", "points_by_kind", "yx_state", "protocols", "channels", "top_yc", "events"):
                     self.assertIn(key, data)
+                # 4. 三端合屏页面与同源聚合接口
+                conn.request("GET", "/dashboard-all")
+                rall = conn.getresponse()
+                html_all = rall.read().decode("utf-8")
+                self.assertEqual(rall.status, 200)
+                self.assertIn('data-dash-role="all"', html_all)
+                self.assertIn("dash-layout-all", html_all)
+                self.assertIn("dash-all-bus-host", html_all)
+                self.assertIn("dash-all-ring-svg", html_all)
+
+                conn.request("GET", "/api/dashboard-all")
+                ra_api = conn.getresponse()
+                all_payload = json.loads(ra_api.read().decode("utf-8"))
+                self.assertEqual(ra_api.status, 200)
+                for key in ("overall_score", "services", "s", "c", "t", "merged_events"):
+                    self.assertIn(key, all_payload)
+                self.assertTrue(all_payload["services"][expected_component]["online"])
                 return data
             finally:
                 conn.close()

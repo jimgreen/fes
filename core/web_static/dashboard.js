@@ -62,13 +62,15 @@
 
   const state = {
     component: document.body?.dataset?.dashRole || "c",
+    isAllMode: document.body?.dataset?.dashRole === "all",
+    allData: null,
     data: null,
     timer: null,
     intervalMs: 2000,
     abort: null,
     hbarTab: document.body?.dataset?.dashRole === "s" ? "led" : "primary",
     tLeftTab: "bars",
-    scopeMode: "sync",
+    scopeMode: document.body?.dataset?.dashRole === "all" ? "wave" : "sync",
     scopePhase: 0,
     scopeAnimFrame: 0,
     scopeHistory: [],
@@ -465,9 +467,11 @@
 
     const s1Label = state.component === "t" ? tr("源读入/s") : tr("接收帧/s");
     const s2Label = state.component === "t" ? tr("转发上送/s") : tr("发送帧/s");
-    $("dash-trend-legend").innerHTML =
-      `<span class="dash-legend-item"><i class="dash-legend-swatch is-s0"></i>${esc(s1Label)}</span>` +
-      `<span class="dash-legend-item"><i class="dash-legend-swatch is-s1"></i>${esc(s2Label)}</span>`;
+    if ($("dash-trend-legend")) {
+      $("dash-trend-legend").innerHTML =
+        `<span class="dash-legend-item"><i class="dash-legend-swatch is-s0"></i>${esc(s1Label)}</span>` +
+        `<span class="dash-legend-item"><i class="dash-legend-swatch is-s1"></i>${esc(s2Label)}</span>`;
+    }
 
     const pad = { top: 14, right: 26, bottom: 22, left: 36 };
     const plotW = Math.max(20, W - pad.left - pad.right);
@@ -1339,7 +1343,277 @@
     }
   }
 
+  // ==================== 11. 全域三端融合总控大屏渲染器（S + C + T） ====================
+  function renderAllDashboard(payload, firstPaint = false) {
+    if (!payload) return;
+    const pal = getPalette();
+    const s = payload.s || {};
+    const c = payload.c || {};
+    const t = payload.t || {};
+    const sk = s.kpis || {};
+    const ck = c.kpis || {};
+    const tk = t.kpis || {};
+    const svcs = payload.services || {};
+
+    // 1. 顶部全域 KPI 串
+    const dot = $("dash-live-dot");
+    const totalAlerts = Number(sk.alerts_total || 0) + Number(ck.alerts_total || 0);
+    if (dot) dot.className = "dash-live-dot" + (totalAlerts > 0 ? " is-err" : "");
+    const kpiItems = [
+      { key: "score", label: "综合健康", val: payload.overall_score, cls: payload.overall_score >= 85 ? "is-ok" : "is-warn", raw: payload.overall_score, unit: "分" },
+      { key: "s_ch", label: "仿真 S", val: `${sk.channels_running}/${sk.channels_total}`, cls: "is-accent", raw: null },
+      { key: "c_ch", label: "采集 C", val: `${ck.channels_running}/${ck.channels_total}`, cls: ck.channels_error ? "is-err" : "is-ok", raw: null },
+      { key: "t_ch", label: "转发 T", val: `${tk.channels_running}/${tk.channels_total}`, cls: "is-ok", raw: null },
+      { key: "pts", label: "全域测点", val: ck.points_total + sk.points_total, cls: "is-accent", raw: ck.points_total + sk.points_total },
+      { key: "diff", label: "对账偏差", val: tk.diff_points, cls: tk.diff_points > 0 ? "is-warn" : "is-ok", raw: tk.diff_points },
+      { key: "alerts", label: "全域告警", val: totalAlerts, cls: totalAlerts > 0 ? "is-err" : "is-ok", raw: totalAlerts },
+    ];
+    const kpiHost = $("dash-kpis");
+    if (kpiHost) {
+      if (kpiHost.dataset.comp !== "all") {
+        kpiHost.dataset.comp = "all";
+        kpiHost.innerHTML = kpiItems
+          .map(
+            (it) =>
+              `<div class="dash-kpi-item"><span class="dash-kpi-label">${esc(tr(it.label))}</span>` +
+              `<span class="dash-kpi-val ${it.cls}" data-kpi-key="${it.key}">${esc(it.raw === null ? it.val : fmtCompact(it.raw))}</span>` +
+              (it.unit ? `<span class="dash-kpi-unit">${esc(tr(it.unit))}</span>` : "") +
+              `</div>`,
+          )
+          .join("");
+      }
+      kpiItems.forEach((it) => {
+        const el = kpiHost.querySelector(`[data-kpi-key="${it.key}"]`);
+        if (!el) return;
+        el.className = `dash-kpi-val ${it.cls}`;
+        if (it.raw === null) el.textContent = it.val;
+        else animateElementNumber(el, `all:${it.key}`, it.raw);
+      });
+    }
+
+    // 绑定三柱直达各端大屏链接
+    if ($("dash-all-link-s") && svcs.s?.dashboard_url) $("dash-all-link-s").href = svcs.s.dashboard_url;
+    if ($("dash-all-link-c") && svcs.c?.dashboard_url) $("dash-all-link-c").href = svcs.c.dashboard_url;
+    if ($("dash-all-link-t") && svcs.t?.dashboard_url) $("dash-all-link-t").href = svcs.t.dashboard_url;
+
+    // 2. 上左：S -> C -> T 全域端到端实时脉冲总线拓扑 SVG
+    const busHost = $("dash-all-bus-host");
+    if (busHost) {
+      const onlineCount = ["s", "c", "t"].filter((k) => svcs[k]?.online).length;
+      if ($("dash-all-bus-meta")) $("dash-all-bus-meta").textContent = `${onlineCount}/3 ${tr("服务在线")} · ${fmtCompact(ck.rx_total + sk.rx_total + tk.tx_total)} ${tr("总帧")}`;
+      const W = 740;
+      const H = 212;
+      const cards = [
+        {
+          key: "s",
+          x: 18,
+          title: "scdfe_s · 规约仿真",
+          sub1: `服务 ${sk.channels_running}/${sk.channels_total} · 测点 ${fmtCompact(sk.points_total)}`,
+          sub2: `接入客户端 ${sk.active_clients} · 健康 ${s.health_score ?? 100}`,
+          color: pal.series[0],
+          online: Boolean(svcs.s?.online),
+          href: svcs.s?.dashboard_url || "/dashboard",
+        },
+        {
+          key: "c",
+          x: 274,
+          title: "scdfe_c · 实时采集",
+          sub1: `RTU ${ck.channels_running}/${ck.channels_total} · 四遥 ${fmtCompact(ck.points_total)}`,
+          sub2: `收 ${fmtCompact(ck.rx_total)} · 发 ${fmtCompact(ck.tx_total)} · 异常 ${ck.channels_error}`,
+          color: ck.channels_error > 0 ? pal.warn : pal.ok,
+          online: Boolean(svcs.c?.online),
+          href: svcs.c?.dashboard_url || "/dashboard",
+        },
+        {
+          key: "t",
+          x: 530,
+          title: "scdfe_t · 四遥转发",
+          sub1: `通道 ${tk.channels_running}/${tk.channels_total} · 映射 ${fmtCompact(tk.mapped_points)}`,
+          sub2: `偏差 ${tk.diff_points} · 在线主站 ${tk.active_clients}`,
+          color: tk.diff_points > 0 ? pal.warn : pal.series[1],
+          online: Boolean(svcs.t?.online),
+          href: svcs.t?.dashboard_url || "/dashboard",
+        },
+      ];
+      const cw = 192;
+      const ch = 112;
+      const cy = (H - ch) / 2;
+      const midY = H / 2;
+      const link1 = `M ${18 + cw} ${midY} C ${18 + cw + 22} ${midY - 18}, ${274 - 22} ${midY + 18}, 274 ${midY}`;
+      const link2 = `M ${274 + cw} ${midY} C ${274 + cw + 22} ${midY - 18}, ${530 - 22} ${midY + 18}, 530 ${midY}`;
+      const back1 = `M 274 ${midY + 26} C ${274 - 24} ${midY + 34}, ${18 + cw + 24} ${midY + 34}, ${18 + cw} ${midY + 26}`;
+      const back2 = `M 530 ${midY + 26} C ${530 - 24} ${midY + 34}, ${274 + cw + 24} ${midY + 34}, ${274 + cw} ${midY + 26}`;
+
+      busHost.innerHTML =
+        `<svg class="dash-topo-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">` +
+        `<path d="${link1}" fill="none" stroke="${hexToRgba(pal.series[0], 0.25)}" stroke-width="10" stroke-linecap="round"></path>` +
+        `<path class="dash-flow-pulse" d="${link1}" stroke="${pal.series[0]}"></path>` +
+        `<path d="${link2}" fill="none" stroke="${hexToRgba(pal.ok, 0.25)}" stroke-width="10" stroke-linecap="round"></path>` +
+        `<path class="dash-flow-pulse" d="${link2}" stroke="${pal.ok}"></path>` +
+        `<path class="dash-flow-pulse is-slow" d="${back1}" stroke="${pal.warn}"></path>` +
+        `<path class="dash-flow-pulse is-slow" d="${back2}" stroke="${pal.warn}"></path>` +
+        `<text x="242" y="${midY - 22}" text-anchor="middle" fill="${pal.textSub}" font-size="9.5">${esc(tr("采集链路"))}</text>` +
+        `<text x="498" y="${midY - 22}" text-anchor="middle" fill="${pal.textSub}" font-size="9.5">${esc(tr("转发映射"))}</text>` +
+        `<text x="242" y="${midY + 46}" text-anchor="middle" fill="${pal.textMuted}" font-size="9">${esc(tr("遥控/遥调"))}</text>` +
+        `<text x="498" y="${midY + 46}" text-anchor="middle" fill="${pal.textMuted}" font-size="9">${esc(tr("上行指令"))}</text>` +
+        cards
+          .map(
+            (card) => `
+          <g class="dash-node-box" data-nav-href="${esc(card.href)}">
+            <rect x="${card.x}" y="${cy}" width="${cw}" height="${ch}" rx="12" fill="${pal.bgSubtle}" stroke="${card.color}" stroke-width="1.6"></rect>
+            <rect x="${card.x}" y="${cy}" width="${cw}" height="28" rx="12" fill="${hexToRgba(card.color, 0.16)}"></rect>
+            <circle cx="${card.x + 14}" cy="${cy + 14}" r="4" fill="${card.online ? pal.ok : pal.danger}"></circle>
+            <text x="${card.x + 24}" y="${cy + 18}" fill="${pal.text}" font-size="11.5" font-weight="700">${esc(tr(card.title))}</text>
+            <text x="${card.x + 12}" y="${cy + 52}" fill="${pal.text}" font-size="11" font-family="var(--font-mono)">${esc(card.sub1)}</text>
+            <text x="${card.x + 12}" y="${cy + 74}" fill="${pal.textSub}" font-size="10.2" font-family="var(--font-mono)">${esc(card.sub2)}</text>
+            <text x="${card.x + cw - 12}" y="${cy + 98}" text-anchor="end" fill="${card.color}" font-size="10" font-weight="600">${esc(tr("进入单端大屏 ↗"))}</text>
+          </g>`,
+          )
+          .join("") +
+        `</svg>`;
+      busHost.querySelectorAll("[data-nav-href]").forEach((g) => {
+        g.addEventListener("click", () => {
+          if (g.dataset.navHref) location.href = g.dataset.navHref;
+        });
+      });
+    }
+
+    // 3. 上右：三端同心三环综合健康仪
+    const ringHost = $("dash-all-ring-svg");
+    if (ringHost) {
+      const sScore = Number(s.health_score ?? 100);
+      const cScore = Number(c.health_score ?? 100);
+      const tScore = tk.mapped_points > 0 ? Math.max(0, Math.round(((tk.mapped_points - tk.diff_points) / tk.mapped_points) * 100)) : Number(t.health_score ?? 100);
+      if ($("dash-all-ring-meta")) $("dash-all-ring-meta").textContent = `C ${cScore} · S ${sScore} · T ${tScore}`;
+      const mkRing = (r, sw, pct, col) => {
+        const len = 2 * Math.PI * r;
+        const off = len * (1 - Math.max(0, Math.min(100, pct)) / 100);
+        return (
+          `<circle cx="90" cy="90" r="${r}" fill="none" stroke="${pal.bgSubtle}" stroke-width="${sw}"></circle>` +
+          `<circle class="dash-gauge-arc" cx="90" cy="90" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round" ` +
+          `stroke-dasharray="${len.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 90 90)"></circle>`
+        );
+      };
+      ringHost.innerHTML =
+        `<svg class="dash-gauge-svg" viewBox="0 0 180 180" aria-label="三端综合健康">` +
+        `<circle class="dash-gauge-orbit" cx="90" cy="90" r="82" fill="none" stroke="${pal.border}" stroke-width="1" stroke-dasharray="3 6"></circle>` +
+        mkRing(70, 8, cScore, pal.ok) +
+        mkRing(56, 7, sScore, pal.accent) +
+        mkRing(43, 6, tScore, pal.warn) +
+        `<text x="90" y="88" text-anchor="middle" fill="${pal.text}" font-size="26" font-weight="700" font-family="var(--font-mono)">${payload.overall_score}</text>` +
+        `<text x="90" y="105" text-anchor="middle" fill="${pal.textSub}" font-size="10">${esc(tr("三端综合分"))}</text>` +
+        `</svg>`;
+    }
+    const pillsHost = $("dash-all-svc-pills");
+    if (pillsHost) {
+      pillsHost.innerHTML = [
+        { k: "s", label: "仿真 S", online: svcs.s?.online, href: svcs.s?.dashboard_url || "/dashboard" },
+        { k: "c", label: "采集 C", online: svcs.c?.online, href: svcs.c?.dashboard_url || "/dashboard" },
+        { k: "t", label: "转发 T", online: svcs.t?.online, href: svcs.t?.dashboard_url || "/dashboard" },
+      ]
+        .map(
+          (p) =>
+            `<a class="dash-mini-stat dash-all-svc-pill ${p.online ? "is-ok" : "is-err"}" href="${esc(p.href)}">` +
+            `<b>${p.online ? "ON" : "OFF"}</b><span>${esc(tr(p.label))}</span></a>`,
+        )
+        .join("");
+    }
+
+    // 4. 下左柱：仿真端 S（迷你示波器 + 紧凑 LED 灯阵）
+    state.data = s;
+    pushScopeSample(s);
+    drawScopeCanvas();
+    const sSub = $("dash-all-s-summary");
+    if (sSub) {
+      const yxList = (s.yx_matrix || []).slice(0, 12);
+      const yx = s.yx_state || { zero: 0, one: 0, other: 0 };
+      const yxTotal = yx.zero + yx.one + yx.other;
+      const p1 = yxTotal ? (yx.one / yxTotal) * 100 : 0;
+      const p0 = yxTotal ? (yx.zero / yxTotal) * 100 : 0;
+      sSub.innerHTML =
+        `<div class="dash-all-led-mini">` +
+        yxList
+          .map((pt) => {
+            const cls = pt.value === 1 || pt.value === 1.0 ? "is-on" : "";
+            return `<div class="dash-led-cell ${cls}" title="${esc(pt.name)} = ${esc(pt.value ?? "—")}"><i class="dash-led-lamp"></i><span class="dash-led-label">#${pt.pnt_no}</span></div>`;
+          })
+          .join("") +
+        `</div>` +
+        `<div class="dash-hbar-row"><div class="dash-hbar-head"><span class="dash-hbar-name">${esc(tr("仿真遥信 1/0"))}</span>` +
+        `<span class="dash-hbar-num">${fmtCompact(yx.one)} / ${fmtCompact(yx.zero)}</span></div>` +
+        `<div class="dash-yx-split"><svg class="dash-yx-svg" viewBox="0 0 100 10" preserveAspectRatio="none">` +
+        `<rect x="0" y="0" width="${p1.toFixed(1)}" height="10" fill="${pal.ok}"></rect>` +
+        `<rect x="${p1.toFixed(1)}" y="0" width="${p0.toFixed(1)}" height="10" fill="${pal.accent}" opacity="0.78"></rect>` +
+        `</svg></div></div>`;
+    }
+
+    // 5. 下中柱：采集端 C（实时吞吐双曲线 + 四遥 SVG 棒图）
+    state.component = "c";
+    pushTrendPoint(c);
+    drawTrendCanvas();
+    const cBars = $("dash-all-c-bars");
+    if (cBars) {
+      const pbk = c.points_by_kind || {};
+      const kinds = [
+        { k: "yc", l: "遥测 YC", col: pal.series[0] },
+        { k: "yx", l: "遥信 YX", col: pal.series[1] },
+        { k: "yt", l: "遥调 YT", col: pal.series[2] },
+        { k: "yk", l: "遥控 YK", col: pal.series[3] },
+      ];
+      const maxP = Math.max(1, ...kinds.map((x) => Number(pbk[x.k] || 0)));
+      cBars.innerHTML = kinds
+        .map((x) => {
+          const n = Number(pbk[x.k] || 0);
+          const pct = n > 0 ? Math.max(4, (n / maxP) * 100) : 0;
+          return `<div class="dash-hbar-row"><div class="dash-hbar-head"><span class="dash-hbar-name">${esc(tr(x.l))}</span>` +
+            `<span class="dash-hbar-num">${fmtCompact(n)}</span></div><div class="dash-hbar-track">${svgBarMarkup(pct, x.col)}</div></div>`;
+        })
+        .join("");
+    }
+
+    // 6. 下右柱：转发端 T（保真绿盾 + 紧凑覆盖棒图 + 三端合并事件流）
+    renderShieldBanner(t);
+    const tBars = $("dash-all-t-bars");
+    if (tBars) {
+      const mbk = t.mapping_by_kind || {};
+      tBars.innerHTML = [
+        { k: "yc", l: "YC 映射", col: pal.series[0] },
+        { k: "yx", l: "YX 映射", col: pal.series[1] },
+      ]
+        .map((x) => {
+          const rec = mbk[x.k] || { total: 0, mapped: 0 };
+          const pct = rec.total > 0 ? Math.min(100, (rec.mapped / rec.total) * 100) : 0;
+          return `<div class="dash-hbar-row"><div class="dash-hbar-head"><span class="dash-hbar-name">${esc(tr(x.l))}</span>` +
+            `<span class="dash-hbar-num">${fmtCompact(rec.mapped)} / ${fmtCompact(rec.total)} (${pct.toFixed(0)}%)</span></div>` +
+            `<div class="dash-hbar-track">${svgBarMarkup(Math.max(pct, rec.mapped ? 4 : 0), x.col)}</div></div>`;
+        })
+        .join("");
+    }
+    const feedList = $("dash-feed-list");
+    if (feedList) {
+      const evs = payload.merged_events || [];
+      const relFn = window.scadaTableReconcile?.formatRelativeTime;
+      feedList.innerHTML = evs.length
+        ? evs
+            .slice(0, 6)
+            .map((ev) => {
+              const tStr = relFn ? relFn(ev.time_ms, 0).text : new Date(ev.time_ms).toTimeString().slice(0, 8);
+              return `<a class="dash-feed-item is-${esc(ev.severity || "info")}" href="${esc(ev.href || "/")}">` +
+                `<span class="dash-feed-cat">${esc(tr(ev.source_label || ev.category || "动态"))}</span>` +
+                `<span class="dash-feed-main"><span class="dash-feed-title">${esc(ev.title || "")}</span>` +
+                `<span class="dash-feed-detail">${esc(ev.detail || "")}</span></span>` +
+                `<span class="dash-feed-time">${esc(tStr)}</span></a>`;
+            })
+            .join("")
+        : `<div class="dash-empty">${esc(tr("三端运行平稳，暂无新动态"))}</div>`;
+    }
+  }
+
   function renderAll(firstPaint = false) {
+    if (state.isAllMode) {
+      if (state.allData) renderAllDashboard(state.allData, firstPaint);
+      return;
+    }
     if (!state.data) return;
     renderStrip(state.data);
     renderGauge(state.data);
@@ -1362,11 +1636,19 @@
     if (state.abort) state.abort.abort();
     state.abort = typeof AbortController === "function" ? new AbortController() : null;
     try {
-      const resp = await fetch("/api/dashboard-overview", {
+      const endpoint = state.isAllMode ? "/api/dashboard-all" : "/api/dashboard-overview";
+      const resp = await fetch(endpoint, {
         cache: "no-cache",
         signal: state.abort?.signal,
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (state.isAllMode) {
+        const firstPaint = !state.allData;
+        const payload = await resp.json();
+        state.allData = payload;
+        renderAllDashboard(payload, firstPaint);
+        return;
+      }
       const firstPaint = !state.data;
       const data = await resp.json();
       state.component = data.component || state.component;
@@ -1376,7 +1658,7 @@
       renderAll(firstPaint);
     } catch (err) {
       if (err?.name === "AbortError") return;
-      const meta = $("dash-topo-meta") || $("dash-sankey-meta") || $("dash-svc-meta");
+      const meta = $("dash-all-bus-meta") || $("dash-topo-meta") || $("dash-sankey-meta") || $("dash-svc-meta");
       if (meta) meta.textContent = err.message || "加载失败";
     }
   }

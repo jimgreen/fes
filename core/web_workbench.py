@@ -33,18 +33,21 @@ NAV_ICONS = {
     "▧": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="m14.7 6.3 3 3L8 19H5v-3l9.7-9.7z"/><path d="M12 20h9"/></svg>',
     "⇶": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><path d="M4 7h12m0 0-3-3m3 3-3 3M4 17h12m0 0-3-3m3 3-3 3M20 4v16"/></svg>',
     "◈": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>',
+    "❖": '<svg class="ui-nav-icon" viewBox="0 0 24 24"><rect x="2.5" y="4" width="19" height="12" rx="1.8"/><path d="M8 20h8M12 16v4"/><circle cx="7.5" cy="10" r="1.4"/><circle cx="12" cy="10" r="1.4"/><circle cx="16.5" cy="10" r="1.4"/></svg>',
 }
 
 
 def _nav_icon(symbol: str) -> str:
     return NAV_ICONS.get(symbol, escape(symbol))
 
-DASHBOARD_PAGE = ("dashboard.html", "/dashboard", "◈", "总览大屏", "动态业务可视化总览与大屏指挥视图")
+DASHBOARD_ALL_PAGE = ("dashboard-all.html", "/dashboard-all", "❖", "三端合屏", "S 仿真 · C 采集 · T 转发全域融合总控大屏")
+DASHBOARD_PAGE = ("dashboard.html", "/dashboard", "◈", "总览大屏", "当前端专属动态可视化大屏视图")
 POINT_TRENDS_PAGE = ("point-trends.html", "/point-trends", "∿", "采样管理", "管理实时曲线采样与历史")
 POINT_TRACE_PAGE = ("point-trace.html", "/point-trace", "⇶", "全链路对账", "C 采集与 T 转发四遥全链路实时对账")
 
 S_PAGES = [
     ("运行管理", [
+        DASHBOARD_ALL_PAGE,
         DASHBOARD_PAGE,
         ("communication.html", "/communication", "◉", "通道与进程监控", "统一展示通道通信、进程状态、PID、心跳与启停"),
         ("logs.html", "/logs", "≡", "日志报文", "按通信通道浏览运行日志和收发报文"),
@@ -68,6 +71,7 @@ S_TEST_SECTIONS = (
 )
 C_PAGES = [
     ("运行管理", [
+        DASHBOARD_ALL_PAGE,
         DASHBOARD_PAGE,
         ("scdfe", "/#scdfe", "◉", "通信监控", "通道通信状态与核心服务"),
         ("processes", "/#processes", "▤", "进程监控", "进程与运行状态"),
@@ -89,6 +93,7 @@ C_DATA_SECTIONS = (
 )
 T_PAGES = [
     ("运行管理", [
+        DASHBOARD_ALL_PAGE,
         DASHBOARD_PAGE,
         ("communication.html", "/communication", "◉", "通道与进程监控", "统一展示转发通道监听状态、PID、心跳与启停"),
         ("logs.html", "/logs", "≡", "日志报文", "按年月日小时浏览运行日志和收发报文文件"),

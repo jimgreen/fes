@@ -1370,6 +1370,129 @@ def read_dashboard_overview(store, component: str) -> dict:
     }
 
 
+class _ReadOnlyDbStore:
+    """只读访问同工作区兄弟数据库（如从 C/T 端只读 scdfe_s.db），零写锁冲突。"""
+
+    def __init__(self, db_path: Path):
+        self.db_path = Path(db_path)
+
+    def connection(self):
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _ctx():
+            con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, timeout=0.5)
+            con.row_factory = sqlite3.Row
+            try:
+                yield con
+            finally:
+                con.close()
+
+        return _ctx()
+
+
+def _empty_dashboard_snapshot(role: str, now_ms: int) -> dict:
+    return {
+        "component": role,
+        "timestamp_ms": now_ms,
+        "health_score": 100,
+        "kpis": {
+            "channels_total": 0, "channels_running": 0, "channels_error": 0, "channels_stopped": 0,
+            "points_total": 0, "rx_total": 0, "tx_total": 0, "err_total": 0,
+            "active_clients": 0, "alerts_total": 0, "mapped_points": 0, "diff_points": 0,
+        },
+        "points_by_kind": {"yc": 0, "yx": 0, "yk": 0, "yt": 0},
+        "yx_state": {"zero": 0, "one": 0, "other": 0},
+        "yx_matrix": [],
+        "diff_samples": [],
+        "mapping_by_kind": {k: {"total": 0, "mapped": 0} for k in ("yc", "yx", "yk", "yt")},
+        "protocols": [],
+        "channels": [],
+        "source_rtus": [],
+        "top_yc": [],
+        "processes": [],
+        "clients": [],
+        "events": [],
+    }
+
+
+def _probe_port_open(url: str) -> bool:
+    import socket
+    from urllib.parse import urlsplit
+
+    try:
+        sp = urlsplit(url)
+        host = sp.hostname or "127.0.0.1"
+        port = sp.port or (443 if sp.scheme == "https" else 80)
+        with socket.create_connection((host, port), timeout=0.12):
+            return True
+    except OSError:
+        return False
+
+
+def read_dashboard_all(handler, store, component: str) -> dict:
+    """一次只读聚合 S / C / T 三端实时大屏快照与服务在线态（零跨域问题）。"""
+    import time
+
+    now_ms = int(time.time() * 1000)
+    db_dir = Path(store.db_path).parent
+    wb = workbench_links_payload(handler, component)
+    link_map = {item["key"]: item["url"] for item in wb.get("links", [])}
+
+    if component == "s":
+        s_data = read_dashboard_overview(store, "s")
+        c_db = db_dir / "scdfe_c.db"
+        if c_db.is_file():
+            ro_c = _ReadOnlyDbStore(c_db)
+            c_data = read_dashboard_overview(ro_c, "c")
+            t_data = read_dashboard_overview(ro_c, "t")
+        else:
+            c_data = _empty_dashboard_snapshot("c", now_ms)
+            t_data = _empty_dashboard_snapshot("t", now_ms)
+    else:
+        c_data = read_dashboard_overview(store, "c")
+        t_data = read_dashboard_overview(store, "t")
+        s_db = db_dir / "scdfe_s.db"
+        if s_db.is_file():
+            s_data = read_dashboard_overview(_ReadOnlyDbStore(s_db), "s")
+        else:
+            s_data = _empty_dashboard_snapshot("s", now_ms)
+
+    services = {}
+    for key in ("s", "c", "t"):
+        url = link_map.get(key, "")
+        services[key] = {
+            "url": url,
+            "dashboard_url": (url.rstrip("/") + "/dashboard") if url else "/dashboard",
+            "online": True if key == component else _probe_port_open(url),
+        }
+
+    # 合并三端最近动态流（标注来源端并指向对应端 URL）
+    merged_events: list[dict] = []
+    for role_key, role_tag, snap in (("c", "采集 C", c_data), ("s", "仿真 S", s_data), ("t", "转发 T", t_data)):
+        base = link_map.get(role_key, "").rstrip("/")
+        for ev in (snap.get("events") or [])[:6]:
+            href = ev.get("href") or "/"
+            if base and role_key != component and href.startswith("/"):
+                href = base + href
+            merged_events.append({**ev, "source": role_key, "source_label": role_tag, "href": href})
+    merged_events.sort(key=lambda x: int(x.get("time_ms") or 0), reverse=True)
+
+    scores = [int(s_data.get("health_score", 100)), int(c_data.get("health_score", 100)), int(t_data.get("health_score", 100))]
+    overall_score = int(round(sum(scores) / len(scores)))
+
+    return {
+        "component": component,
+        "timestamp_ms": now_ms,
+        "overall_score": overall_score,
+        "services": services,
+        "s": s_data,
+        "c": c_data,
+        "t": t_data,
+        "merged_events": merged_events[:14],
+    }
+
+
 def workbench_links_payload(handler, component: str) -> dict:
     """返回 C/S/T 三端服务快捷跳转配置及当前安全权限态。"""
     host = "127.0.0.1"
@@ -1456,6 +1579,25 @@ def handle_ux_api(handler, parts, query, method, store, component):
             raise ApiError(405, "报文译码只支持 POST")
         body = handler._body()
         return handler._json(200, decode_packet_payload(body))
+
+    if parts == ["dashboard-all"]:
+        if method != "GET":
+            raise ApiError(405, "只支持 GET")
+        tpl_path = assets / "dashboard-all.html"
+        if component in ("c", "t", "s"):
+            return send_static(
+                handler,
+                tpl_path,
+                "text/html; charset=utf-8",
+                transform=lambda raw: render_workbench(raw, component, "dashboard-all.html"),
+                cache_key=f"workbench:{component}:dashboard-all.html",
+            )
+        return send_static(handler, tpl_path, "text/html; charset=utf-8")
+
+    if parts == ["api", "dashboard-all"]:
+        if method != "GET":
+            raise ApiError(405, "三端合屏总览接口只支持 GET")
+        return handler._json(200, read_dashboard_all(handler, store, component))
 
     if parts in (["dashboard"], ["static", "dashboard.css"], ["static", "dashboard.js"]):
         if method != "GET":
