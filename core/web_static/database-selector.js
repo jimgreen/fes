@@ -27,8 +27,9 @@
     button.innerHTML =
       '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true">' +
       '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>' +
-      '</svg><span class="ui-db-name"></span>';
-    button.querySelector('.ui-db-name').textContent = shortName;
+      '</svg><span class="ui-db-path"><span class="ui-db-dir"></span><span class="ui-db-file"></span></span>';
+    button.querySelector('.ui-db-dir').textContent = path.slice(0, separator);
+    button.querySelector('.ui-db-file').textContent = shortName;
     button.title = '切换数据库 · ' + path;
     button.setAttribute('aria-label', '选择数据库：' + path);
     databasePath.setAttribute('aria-label', '当前数据库路径');
