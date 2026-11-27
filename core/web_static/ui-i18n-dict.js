@@ -1177,6 +1177,8 @@
     ["5 · 单线圈", "5 · Single Coil", "5 · Одна катушка"],
     ["6 · 单寄存器", "6 · Single Register", "6 · Один регистр"],
     ["16 · 多寄存器", "16 · Multiple Registers", "16 · Несколько регистров"],
+    ["全屏显示", "Enter Fullscreen", "Во весь экран"],
+    ["退出全屏", "Exit Fullscreen", "Выйти из полноэкранного режима"],
   ];
 
   for (const [zh, en, ru] of PHRASES) {

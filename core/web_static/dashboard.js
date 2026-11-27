@@ -1884,6 +1884,15 @@
 
   // ==================== 大屏全屏模式 / 时钟 / 定时器 / 主题响应 ====================
   function toggleFullscreen() {
+    if (typeof window.scadaToggleFullscreen === "function") {
+      window.scadaToggleFullscreen();
+      setTimeout(() => {
+        drawScopeCanvas();
+        drawTrendCanvas();
+        drawBarCanvas();
+      }, 80);
+      return;
+    }
     const active = document.body.classList.toggle("dash-fullscreen");
     const btn = $("dash-fullscreen");
     if (btn) {

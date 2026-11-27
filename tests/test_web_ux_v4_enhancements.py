@@ -191,6 +191,8 @@ class WebUxV4EnhancementTests(unittest.TestCase):
         self.assertIn("initAutoHideSidebar", wb_js)
         self.assertIn("ui-sidebar-edge", wb_js)
         self.assertIn("ui-sidebar-toggle", wb_js)
+        self.assertIn("ui-fullscreen-btn", wb_js)
+        self.assertIn("scadaToggleFullscreen", wb_js)
         self.assertIn("scada_sidebar_mode", wb_js)
         self.assertIn("is-sidebar-peek", theme_css)
         self.assertIn('data-sidebar-mode="dock"', theme_css)

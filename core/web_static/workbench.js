@@ -16,6 +16,8 @@
     sbFloat: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="10" height="16" rx="2"/><path d="M17 7h4M17 12h4M17 17h4"/></svg>',
     sbDock: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>',
     sbHide: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+    fsEnter: '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>',
+    fsExit: '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>',
   };
 
   // ==================== 1. 健康探活 ====================
@@ -966,6 +968,85 @@
     };
   }
 
+  // ==================== 8. 全站顶栏右侧全屏显示/退出图标 ====================
+  function getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function mountFullscreenButton() {
+    const tools = document.querySelector(".header-tools");
+    if (!tools || document.getElementById("ui-fullscreen-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "ui-fullscreen-btn";
+    btn.className = "ui-fullscreen-btn";
+
+    const syncFsUi = () => {
+      const active = Boolean(getFullscreenElement()) || document.documentElement.dataset.pageFullscreen === "1";
+      const label = active ? "退出全屏" : "全屏显示";
+      btn.innerHTML = active ? UI_ICONS.fsExit : UI_ICONS.fsEnter;
+      btn.classList.toggle("is-active", active);
+      btn.title = label;
+      btn.setAttribute("aria-label", label);
+      btn.setAttribute("aria-pressed", String(active));
+    };
+
+    const raceShort = (maybePromise) =>
+      Promise.race([
+        Promise.resolve(maybePromise).catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 120)),
+      ]);
+
+    const togglePageFullscreen = async () => {
+      const docEl = document.documentElement;
+      const fsEl = getFullscreenElement();
+      if (fsEl || docEl.dataset.pageFullscreen === "1") {
+        if (fsEl) {
+          try {
+            if (document.exitFullscreen) await raceShort(document.exitFullscreen());
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+          } catch (_) {
+            // 忽略浏览器权限异常
+          }
+        }
+        delete docEl.dataset.pageFullscreen;
+        syncFsUi();
+        window.dispatchEvent(new Event("resize"));
+        return;
+      }
+      try {
+        if (docEl.requestFullscreen) {
+          await raceShort(docEl.requestFullscreen());
+        } else if (docEl.webkitRequestFullscreen) {
+          docEl.webkitRequestFullscreen();
+        }
+      } catch (_) {
+        // 嵌入式/受限环境不支持原生全屏时平滑回退
+      }
+      if (!getFullscreenElement()) {
+        docEl.dataset.pageFullscreen = "1";
+      }
+      syncFsUi();
+      window.dispatchEvent(new Event("resize"));
+    };
+
+    btn.addEventListener("click", () => { togglePageFullscreen(); });
+    document.addEventListener("fullscreenchange", () => {
+      if (!getFullscreenElement()) delete document.documentElement.dataset.pageFullscreen;
+      syncFsUi();
+      window.dispatchEvent(new Event("resize"));
+    });
+    document.addEventListener("webkitfullscreenchange", () => {
+      if (!getFullscreenElement()) delete document.documentElement.dataset.pageFullscreen;
+      syncFsUi();
+      window.dispatchEvent(new Event("resize"));
+    });
+
+    tools.append(btn);
+    syncFsUi();
+    window.scadaToggleFullscreen = togglePageFullscreen;
+  }
+
   window.scadaFocusContext = { read: readFocus, write: writeFocus, set: writeFocus, clear: clearFocus };
   window.scadaTrackCommand = scadaTrackCommand;
   window.scadaOpenCmdk = openCmdk;
@@ -976,6 +1057,7 @@
     bindFocusWatchers();
     initWorkbenchLinks();
     mountCmdkTrigger();
+    mountFullscreenButton();
     initAutoHideSidebar();
     refreshAlerts();
     setInterval(() => { if (!document.hidden) refreshAlerts(); }, 12000);
