@@ -170,6 +170,8 @@ class WebUxV4EnhancementTests(unittest.TestCase):
         i18n_dict = (ROOT / "core" / "web_static" / "ui-i18n-dict.js").read_text(encoding="utf-8")
         self.assertLess(len(i18n_core.encode("utf-8")), 25 * 1024, "核心 ui-i18n.js 必须已瘦身")
         self.assertIn("THEME_GROUPS", i18n_core)
+        self.assertIn("ui-prefs-trigger", i18n_core)
+        self.assertIn("ui-prefs-popover", i18n_core)
         self.assertIn("/static/ui-i18n-dict.js", i18n_core)
         self.assertGreater(len(i18n_dict.encode("utf-8")), 50 * 1024)
 

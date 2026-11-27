@@ -315,6 +315,18 @@
       });
       themeSelect.value = currentTheme;
     }
+    const langLabel = document.getElementById("ui-prefs-lang-label");
+    if (langLabel) langLabel.textContent = t("ui.lang.label");
+    const themeLabel = document.getElementById("ui-prefs-theme-label");
+    if (themeLabel) themeLabel.textContent = t("ui.theme.label");
+    const trigger = document.getElementById("ui-prefs-trigger");
+    if (trigger) {
+      const langName = langSelect?.selectedOptions?.[0]?.textContent || currentLang;
+      const themeName = t(`ui.theme.${currentTheme}`, currentTheme);
+      const summary = `${langName} · ${themeName}`;
+      trigger.title = summary;
+      trigger.setAttribute("aria-label", `${t("ui.lang.label")} / ${t("ui.theme.label")}: ${summary}`);
+    }
   }
 
   function ensureObserver() {
@@ -386,6 +398,23 @@
     box.id = "ui-global-controls";
     box.className = "ui-global-controls";
 
+    const trigger = document.createElement("button");
+    trigger.id = "ui-prefs-trigger";
+    trigger.type = "button";
+    trigger.className = "ui-prefs-trigger";
+    trigger.setAttribute("aria-haspopup", "true");
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.setAttribute("aria-controls", "ui-prefs-popover");
+    trigger.innerHTML =
+      '<svg class="ui-prefs-icon" viewBox="0 0 24 24" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>' +
+      '</svg>';
+
+    const popover = document.createElement("div");
+    popover.id = "ui-prefs-popover";
+    popover.className = "ui-prefs-popover";
+    popover.hidden = true;
+
     const select = document.createElement("select");
     select.id = "ui-lang-select";
     select.className = "ui-lang-select";
@@ -414,8 +443,42 @@
     themeSelect.value = currentTheme;
     themeSelect.addEventListener("change", () => applyTheme(themeSelect.value));
 
-    box.append(select, themeSelect);
+    const langRow = document.createElement("label");
+    langRow.className = "ui-prefs-row";
+    const langLabel = document.createElement("span");
+    langLabel.id = "ui-prefs-lang-label";
+    langLabel.className = "ui-prefs-label";
+    langRow.append(langLabel, select);
+
+    const themeRow = document.createElement("label");
+    themeRow.className = "ui-prefs-row";
+    const themeLabel = document.createElement("span");
+    themeLabel.id = "ui-prefs-theme-label";
+    themeLabel.className = "ui-prefs-label";
+    themeRow.append(themeLabel, themeSelect);
+
+    popover.append(langRow, themeRow);
+    box.append(trigger, popover);
     tools.append(box);
+
+    const setOpen = (open) => {
+      popover.hidden = !open;
+      trigger.classList.toggle("is-open", open);
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    trigger.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      setOpen(popover.hidden);
+    });
+    document.addEventListener("click", (ev) => {
+      if (!popover.hidden && !box.contains(ev.target)) setOpen(false);
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && !popover.hidden) {
+        setOpen(false);
+        trigger.focus();
+      }
+    });
     updateControls();
   }
 
