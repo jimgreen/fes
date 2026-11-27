@@ -145,6 +145,77 @@
   --shadow: var(--shadow-card);
 }
 
+[data-theme="ethereal-scifi"] {
+  color-scheme: dark;
+  --font-sans: "Inter", "Segoe UI", "Roboto", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --font-heading: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, ui-monospace, monospace;
+
+  /* 60% 缥缈星雾与透亮琉璃底面 */
+  --bg-canvas: #0A1022;
+  --bg-surface: rgba(17, 27, 52, 0.62);
+  --bg-subtle: rgba(26, 39, 72, 0.56);
+  --bg-hover: rgba(125, 211, 252, 0.085);
+  --table-stripe: rgba(20, 32, 62, 0.44);
+  --table-hover: rgba(125, 211, 252, 0.11);
+  --bg-selected: rgba(125, 211, 252, 0.17);
+
+  /* Sidebar 轻纱琉璃侧栏 */
+  --sidebar-bg: rgba(9, 15, 34, 0.84);
+  --sidebar-border: rgba(186, 230, 253, 0.14);
+  --sidebar-title: #7D95BD;
+  --sidebar-text: #C7D8F2;
+  --sidebar-hover: rgba(125, 211, 252, 0.10);
+  --sidebar-active-bg: linear-gradient(90deg, rgba(125, 211, 252, 0.20), rgba(196, 181, 253, 0.14));
+  --sidebar-active-text: #F4F9FF;
+  --sidebar-active-bar: #7DD3FC;
+
+  /* 30% 星纱结构与柔和文字 */
+  --text-primary: #EFF6FF;
+  --text-secondary: #A6BEDC;
+  --text-tertiary: #758DB0;
+  --border-color: rgba(186, 230, 253, 0.15);
+  --border-strong: rgba(196, 181, 253, 0.30);
+  --border: 1px solid var(--border-color);
+
+  /* 10% 星岚青 / 玉石语义色（柔和通透不刺眼） */
+  --accent: #7DD3FC;
+  --accent-hover: #BAE6FD;
+  --accent-contrast: #081226;
+  --accent-soft: rgba(125, 211, 252, 0.15);
+  --accent-ring: rgba(196, 181, 253, 0.32);
+  --ethereal-violet: #C4B5FD;
+
+  --ok: #5EEAD4;
+  --ok-soft: rgba(94, 234, 212, 0.14);
+  --warn: #FCD34D;
+  --warn-soft: rgba(252, 211, 77, 0.14);
+  --danger: #FDA4AF;
+  --danger-soft: rgba(253, 164, 175, 0.15);
+
+  /* 柔和圆润几何与飘逸投影 */
+  --radius-card: 14px;
+  --radius-btn: 9px;
+  --radius-input: 9px;
+  --radius-dialog: 18px;
+  --radius-pill: 9999px;
+  --shadow-card: 0 8px 28px rgba(4, 10, 28, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-dialog: 0 24px 64px rgba(3, 8, 24, 0.62), 0 0 36px rgba(125, 211, 252, 0.12);
+  --ease: 220ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  --bg-surface-2: var(--bg-subtle);
+  --text-muted: var(--text-tertiary);
+  --ink: var(--text-primary);
+  --muted: var(--text-secondary);
+  --line: var(--border-color);
+  --paper: var(--bg-canvas);
+  --white: var(--bg-surface);
+  --teal: var(--accent);
+  --teal-dark: var(--accent-hover);
+  --red: var(--danger);
+  --shadow: var(--shadow-card);
+}
+
 [data-theme="sci-fi-cyan"] {
   color-scheme: dark;
   --font-sans: "Inter", "Segoe UI", "Roboto", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
@@ -192,15 +263,15 @@
   --danger: #FF4D6D;
   --danger-soft: rgba(255, 77, 109, 0.16);
 
-  /* Sharp HUD Geometry */
-  --radius-card: 6px;
-  --radius-btn: 4px;
-  --radius-input: 4px;
-  --radius-dialog: 8px;
-  --radius-pill: 4px;
-  --shadow-card: 0 0 0 1px rgba(0, 229, 255, 0.08), 0 8px 24px rgba(0, 8, 24, 0.55);
-  --shadow-dialog: 0 0 28px rgba(0, 229, 255, 0.18), 0 24px 64px rgba(0, 0, 0, 0.72);
-  --ease: 160ms cubic-bezier(0.2, 0, 0, 1);
+  /* 柔和科幻圆角（去生硬直角机械感） */
+  --radius-card: 12px;
+  --radius-btn: 8px;
+  --radius-input: 8px;
+  --radius-dialog: 16px;
+  --radius-pill: 9999px;
+  --shadow-card: 0 6px 24px rgba(0, 12, 32, 0.42), inset 0 1px 0 rgba(186, 230, 253, 0.08);
+  --shadow-dialog: 0 0 32px rgba(0, 229, 255, 0.15), 0 24px 64px rgba(0, 0, 0, 0.68);
+  --ease: 200ms cubic-bezier(0.22, 1, 0.36, 1);
 
   --ink: var(--text-primary);
   --muted: var(--text-secondary);
@@ -3547,4 +3618,257 @@ body.is-sidebar-peek .ui-sidebar-edge {
   .ui-cmdk-btn kbd {
     display: none;
   }
+}
+
+/* ==================== 全站仙雾星澜 · 柔和科幻美学与高可读图标体系 ==================== */
+
+/* 1. 缥缈星雾极光画布（全站柔和氛围，零生硬死黑工业底） */
+[data-theme="ethereal-scifi"] body {
+  background-color: #090F21 !important;
+  background-image:
+    radial-gradient(62% 52% at 14% 8%, rgba(125, 211, 252, 0.14), transparent 64%),
+    radial-gradient(54% 48% at 86% 12%, rgba(196, 181, 253, 0.15), transparent 66%),
+    radial-gradient(56% 52% at 52% 94%, rgba(94, 234, 212, 0.10), transparent 68%),
+    linear-gradient(160deg, #090E20 0%, #0D1630 48%, #0A1328 100%) !important;
+  background-attachment: fixed;
+}
+
+[data-color-scheme="dark"]:not([data-theme="ethereal-scifi"]) body {
+  background-image:
+    radial-gradient(55% 44% at 16% 6%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 65%),
+    radial-gradient(48% 42% at 88% 12%, color-mix(in srgb, var(--ok) 8%, transparent), transparent 68%);
+  background-attachment: fixed;
+}
+
+[data-color-scheme="light"] body {
+  background-image:
+    radial-gradient(58% 46% at 12% 4%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 66%),
+    radial-gradient(50% 42% at 90% 8%, rgba(167, 139, 250, 0.06), transparent 68%);
+}
+
+/* 2. 透亮磨砂琉璃质感：顶栏、侧栏、卡片、弹窗统一去硬边框 */
+.workbench-topbar,
+.topbar {
+  position: relative;
+  z-index: 900 !important;
+  background: color-mix(in srgb, var(--bg-surface) 78%, transparent) !important;
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border-color)) !important;
+  box-shadow: 0 4px 22px rgba(4, 10, 26, 0.18), inset 0 -1px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+.workbench-sidebar,
+.sidebar {
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border-right: 1px solid color-mix(in srgb, var(--accent) 16%, var(--sidebar-border)) !important;
+}
+
+[data-theme="ethereal-scifi"] .card,
+[data-theme="ethereal-scifi"] .panel,
+[data-theme="ethereal-scifi"] .table-wrap,
+[data-theme="ethereal-scifi"] .metric,
+[data-theme="ethereal-scifi"] .kpi-card {
+  background: rgba(16, 25, 49, 0.64) !important;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  border-color: rgba(186, 230, 253, 0.16) !important;
+  box-shadow: 0 10px 30px rgba(4, 10, 28, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme="ethereal-scifi"] .ui-prefs-popover,
+[data-theme="ethereal-scifi"] .ui-alert-popover,
+[data-theme="ethereal-scifi"] dialog {
+  background: rgba(14, 22, 45, 0.90) !important;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border-color: rgba(186, 230, 253, 0.22) !important;
+  box-shadow: 0 14px 36px rgba(3, 8, 24, 0.56), 0 0 24px rgba(125, 211, 252, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
+}
+
+.card,
+.panel,
+.table-wrap,
+.metric,
+.kpi-card {
+  border-radius: var(--radius-card) !important;
+  transition: border-color var(--ease), box-shadow var(--ease), background var(--ease);
+}
+
+.brand-icon {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--ethereal-violet, var(--ok)) 75%, var(--accent))) !important;
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 34%, transparent) !important;
+  border-radius: 9px !important;
+}
+
+/* 3. 通用高可读矢量图标与柔和图标按钮 */
+.ui-ico {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ui-ico-sm {
+  width: 12.5px;
+  height: 12.5px;
+}
+
+.ui-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px !important;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid color-mix(in srgb, var(--border-color) 85%, transparent) !important;
+  background: color-mix(in srgb, var(--bg-subtle) 76%, transparent) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer;
+  transition: border-color var(--ease), background var(--ease), color var(--ease), box-shadow var(--ease);
+}
+
+.ui-icon-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* 顶栏数据库合并胶囊：图标 + 文件名 */
+#database-entry {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  margin-left: 4px !important;
+}
+
+#database-entry > code {
+  display: none !important;
+}
+
+#select-database.database-select-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border-color)) !important;
+  background: color-mix(in srgb, var(--bg-subtle) 78%, transparent) !important;
+  color: var(--text-primary) !important;
+  transition: border-color var(--ease), background var(--ease), box-shadow var(--ease);
+}
+
+#select-database .ui-db-name {
+  display: none !important;
+}
+
+#select-database.database-select-button:hover {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* 三端切换胶囊柔和星雾化 */
+.ui-sibling-nav {
+  padding: 2px !important;
+  border-radius: var(--radius-pill) !important;
+  background: color-mix(in srgb, var(--bg-subtle) 74%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border-color)) !important;
+  gap: 2px !important;
+}
+
+.ui-sibling-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  height: 24px !important;
+  padding: 0 9px !important;
+  border-radius: var(--radius-pill) !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  transition: background var(--ease), color var(--ease), box-shadow var(--ease) !important;
+}
+
+.ui-sibling-link.is-active {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--ethereal-violet, var(--ok)) 55%, var(--accent))) !important;
+  color: var(--accent-contrast) !important;
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 36%, transparent) !important;
+}
+
+/* 顶栏紧凑状态与操作图标：连接态/告警/速查 */
+#connection.status {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  min-width: 28px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  border-radius: var(--radius-pill) !important;
+  border: 1px solid color-mix(in srgb, var(--ok) 28%, var(--border-color)) !important;
+  background: color-mix(in srgb, var(--ok-soft) 72%, transparent) !important;
+  color: var(--ok) !important;
+  font-size: 11px !important;
+}
+
+#connection.status.error,
+#connection.status.bad {
+  border-color: color-mix(in srgb, var(--danger) 42%, transparent) !important;
+  background: var(--danger-soft) !important;
+  color: var(--danger) !important;
+}
+
+.ui-alert-chip,
+.ui-alert-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  min-width: 28px !important;
+  height: 28px !important;
+  padding: 0 8px !important;
+  border-radius: var(--radius-pill) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11.5px !important;
+  font-weight: 650 !important;
+}
+
+.ui-cmdk-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  border-radius: var(--radius-pill) !important;
+}
+
+/* 侧栏顶部模式切换（图标化分段） */
+.ui-sidebar-seg {
+  border-radius: var(--radius-pill) !important;
+  padding: 2px !important;
+}
+
+.ui-sidebar-mode-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  border-radius: var(--radius-pill) !important;
+  padding: 2px 8px !important;
+}
+
+.ui-sidebar-hide-btn,
+.ui-sidebar-toggle,
+.ui-prefs-trigger {
+  border-radius: var(--radius-pill) !important;
 }

@@ -18,15 +18,16 @@
     },
     {
       key: "scifi",
-      themes: ["sci-fi-cyan", "sci-fi-purple", "sci-fi-matrix"],
+      themes: ["ethereal-scifi", "sci-fi-cyan", "sci-fi-purple", "sci-fi-matrix"],
     },
   ];
   const THEMES = THEME_GROUPS.flatMap(g => g.themes);
   const LEGACY_THEME_MAP = {
-    "sci-fi": "sci-fi-cyan",
+    "sci-fi": "ethereal-scifi",
     "neo-brutalism": "minimalist-light",
   };
   const DARK_THEMES = new Set([
+    "ethereal-scifi",
     "precision-dark",
     "ocean-slate",
     "nord-dark",
@@ -44,7 +45,8 @@
       "ui.theme.label": "界面风格",
       "ui.theme.group.light": "明亮办公",
       "ui.theme.group.dark": "暗黑工程",
-      "ui.theme.group.scifi": "霓虹科幻",
+      "ui.theme.group.scifi": "仙雾科幻",
+      "ui.theme.ethereal-scifi": "仙雾 · 星澜",
       "ui.theme.minimalist-light": "极简明亮",
       "ui.theme.arctic-frost": "极地冰蓝",
       "ui.theme.warm-paper": "护眼暖纸",
@@ -65,7 +67,8 @@
       "ui.theme.label": "UI Theme",
       "ui.theme.group.light": "Light Office",
       "ui.theme.group.dark": "Dark Engineering",
-      "ui.theme.group.scifi": "Neon Sci-Fi",
+      "ui.theme.group.scifi": "Ethereal & Sci-Fi",
+      "ui.theme.ethereal-scifi": "Ethereal Sci-Fi",
       "ui.theme.minimalist-light": "Minimalist Light",
       "ui.theme.arctic-frost": "Arctic Frost",
       "ui.theme.warm-paper": "Warm Paper",
@@ -86,7 +89,8 @@
       "ui.theme.label": "Стиль интерфейса",
       "ui.theme.group.light": "Светлые",
       "ui.theme.group.dark": "Тёмные инженерные",
-      "ui.theme.group.scifi": "Неон Sci-Fi",
+      "ui.theme.group.scifi": "Эфир Sci-Fi",
+      "ui.theme.ethereal-scifi": "Эфир · Сияние",
       "ui.theme.minimalist-light": "Светлый минимализм",
       "ui.theme.arctic-frost": "Арктический лёд",
       "ui.theme.warm-paper": "Тёплая бумага",
@@ -110,7 +114,7 @@
   let dictPromise = null;
   let domObserver = null;
 
-  let currentTheme = "minimalist-light";
+  let currentTheme = "ethereal-scifi";
   let currentLang = "zh-CN";
   let isTranslating = false;
   const originalTexts = new WeakMap();
@@ -122,7 +126,7 @@
     if (theme && Object.prototype.hasOwnProperty.call(LEGACY_THEME_MAP, theme)) {
       return LEGACY_THEME_MAP[theme];
     }
-    return "minimalist-light";
+    return "ethereal-scifi";
   }
 
   try {

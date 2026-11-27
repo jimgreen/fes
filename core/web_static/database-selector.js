@@ -14,15 +14,23 @@
     if (!host) return;
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'database-select-button';
-    button.textContent = '选择数据库'; button.id = 'select-database';
+    button.id = 'select-database';
     const entry = document.createElement('span'); entry.id = 'database-entry';
     const databasePath = document.createElement('code');
     const path = (current.relative_database || current.database).replace(/\\/g, '/');
     const separator = path.lastIndexOf('/') + 1;
+    const shortName = path.slice(separator);
     const directory = document.createElement('span'); directory.className = 'database-directory';
     directory.textContent = path.slice(0, separator);
     const filename = document.createElement('span'); filename.className = 'database-filename';
-    filename.textContent = path.slice(separator);
+    filename.textContent = shortName;
+    button.innerHTML =
+      '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true">' +
+      '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>' +
+      '</svg><span class="ui-db-name"></span>';
+    button.querySelector('.ui-db-name').textContent = shortName;
+    button.title = '切换数据库 · ' + path;
+    button.setAttribute('aria-label', '选择数据库：' + path);
     databasePath.setAttribute('aria-label', '当前数据库路径');
     databasePath.title = path;
     databasePath.append(directory, filename);

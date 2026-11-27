@@ -165,11 +165,13 @@ class WebUxV4EnhancementTests(unittest.TestCase):
         theme_init = (ROOT / "core" / "web_static" / "theme-init.js").read_text(encoding="utf-8")
         self.assertLess(len(theme_init.encode("utf-8")), 1536)
         self.assertIn("scada_ui_theme", theme_init)
+        self.assertIn("ethereal-scifi", theme_init)
 
         i18n_core = (ROOT / "core" / "web_static" / "ui-i18n.js").read_text(encoding="utf-8")
         i18n_dict = (ROOT / "core" / "web_static" / "ui-i18n-dict.js").read_text(encoding="utf-8")
         self.assertLess(len(i18n_core.encode("utf-8")), 25 * 1024, "核心 ui-i18n.js 必须已瘦身")
         self.assertIn("THEME_GROUPS", i18n_core)
+        self.assertIn("ethereal-scifi", i18n_core)
         self.assertIn("ui-prefs-trigger", i18n_core)
         self.assertIn("ui-prefs-popover", i18n_core)
         self.assertIn("/static/ui-i18n-dict.js", i18n_core)

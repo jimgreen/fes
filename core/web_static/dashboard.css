@@ -1091,3 +1091,100 @@ body.dash-fullscreen .workbench-content {
     transition: none !important;
   }
 }
+
+/* ==================== 仙雾星澜 · 柔和琉璃大屏美化与图标控件 ==================== */
+.dash-strip {
+  border-radius: 13px !important;
+  background: color-mix(in srgb, var(--bg-surface) 76%, transparent) !important;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border-color)) !important;
+  box-shadow: 0 6px 24px rgba(4, 10, 28, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.dash-card {
+  border-radius: 14px !important;
+  background: color-mix(in srgb, var(--bg-surface) 74%, transparent) !important;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--border-color)) !important;
+  box-shadow: 0 8px 28px rgba(4, 10, 28, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.dash-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border-color)) !important;
+  box-shadow: 0 10px 32px rgba(4, 10, 28, 0.30), 0 0 24px color-mix(in srgb, var(--accent) 10%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+.dash-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16%;
+  right: 16%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 42%, var(--ethereal-violet, var(--ok))), transparent);
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.dash-card-head {
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent) !important;
+}
+
+.dash-role-tag,
+.dash-source-badge,
+.dash-seg,
+.dash-select,
+.dash-btn {
+  border-radius: 999px !important;
+}
+
+.dash-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0 !important;
+}
+
+.dash-btn.is-accent {
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--ethereal-violet, var(--ok)) 55%, var(--accent))) !important;
+  border-color: transparent !important;
+  color: var(--accent-contrast) !important;
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.dash-kpi-ico {
+  width: 12.5px;
+  height: 12.5px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.78;
+}
+
+.dash-mini-stat,
+.dash-svc-card,
+.dash-led-cell,
+.dash-feed-item,
+.dash-shield-banner {
+  border-radius: 10px !important;
+  background: color-mix(in srgb, var(--bg-subtle) 64%, transparent) !important;
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border-color)) !important;
+}
+
+.dash-shield-banner {
+  background: color-mix(in srgb, var(--ok-soft) 72%, transparent) !important;
+  border-color: color-mix(in srgb, var(--ok) 32%, transparent) !important;
+}
+
+.dash-shield-banner.is-warn {
+  background: color-mix(in srgb, var(--warn-soft) 72%, transparent) !important;
+  border-color: color-mix(in srgb, var(--warn) 38%, transparent) !important;
+}

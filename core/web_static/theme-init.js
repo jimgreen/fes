@@ -2,21 +2,19 @@
 (function () {
   "use strict";
   var T = {
-    "minimalist-light": 0, "arctic-frost": 0, "warm-paper": 0, "slate-daylight": 0,
-    "bento-grid": 0, "editorial": 0, "precision-dark": 1, "ocean-slate": 1,
-    "nord-dark": 1, "industrial-amber": 1, "glassmorphism": 1,
+    "ethereal-scifi": 1, "minimalist-light": 0, "arctic-frost": 0, "warm-paper": 0,
+    "slate-daylight": 0, "bento-grid": 0, "editorial": 0, "precision-dark": 1,
+    "ocean-slate": 1, "nord-dark": 1, "industrial-amber": 1, "glassmorphism": 1,
     "sci-fi-cyan": 1, "sci-fi-purple": 1, "sci-fi-matrix": 1
   };
-  var L = { "sci-fi": "sci-fi-cyan", "neo-brutalism": "minimalist-light" };
+  var L = { "sci-fi": "ethereal-scifi", "neo-brutalism": "minimalist-light" };
   var has = Object.prototype.hasOwnProperty;
   try {
     var d = document.documentElement, ds = d.dataset, ls = localStorage;
     var s = ls.getItem("scada_ui_theme");
-    if (s) {
-      var t = has.call(T, s) ? s : (has.call(L, s) ? L[s] : "minimalist-light");
-      ds.theme = t;
-      ds.colorScheme = T[t] ? "dark" : "light";
-    }
+    var t = s ? (has.call(T, s) ? s : (has.call(L, s) ? L[s] : "ethereal-scifi")) : "ethereal-scifi";
+    ds.theme = t;
+    ds.colorScheme = T[t] ? "dark" : "light";
     var g = ls.getItem("scada_ui_lang");
     if (g === "zh-CN" || g === "en-US" || g === "ru-RU") d.lang = g;
     var m = ls.getItem("scada_sidebar_mode");

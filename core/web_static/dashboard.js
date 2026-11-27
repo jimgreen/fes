@@ -89,10 +89,30 @@
     return text;
   };
 
+  const KPI_ICONS = {
+    score: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 5-3.2 8.2-7 9-3.8-.8-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>',
+    ch: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><path d="M5.6 18.4a9 9 0 0 1 0-12.8m12.8 0a9 9 0 0 1 0 12.8"/></svg>',
+    s_ch: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>',
+    c_ch: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><path d="M5.6 18.4a9 9 0 0 1 0-12.8m12.8 0a9 9 0 0 1 0 12.8"/></svg>',
+    t_ch: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12m0 0-3-3m3 3-3 3M4 17h12m0 0-3-3m3 3-3 3"/></svg>',
+    pts: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+    mapped: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+    rx: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg>',
+    tx: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V8m0 0-4 4m4-4 4 4M4 4h16"/></svg>',
+    cli: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 19a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.2"/><path d="M15 19a4.5 4.5 0 0 1 6 0"/></svg>',
+    diff: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 16V4m0 0-3 3m3-3 3 3M17 8v12m0 0-3-3m3 3 3-3"/></svg>',
+    err: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9L1.8 18.5A2 2 0 0 0 3.5 21.5h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4.5"/><circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none"/></svg>',
+    alerts: '<svg class="dash-kpi-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9L1.8 18.5A2 2 0 0 0 3.5 21.5h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4.5"/><circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none"/></svg>',
+  };
+
+  const FS_ENTER_ICON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+  const FS_EXIT_ICON = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>';
+
   function getPalette() {
     const cs = getComputedStyle(document.documentElement);
     const get = (name, fb) => (cs.getPropertyValue(name) || "").trim() || fb;
     const dark = document.documentElement.dataset.colorScheme === "dark";
+    const ethereal = document.documentElement.dataset.theme === "ethereal-scifi";
     return {
       dark,
       bgSurface: get("--bg-surface", dark ? "#111827" : "#ffffff"),
@@ -101,13 +121,15 @@
       textSub: get("--text-secondary", dark ? "#94a3b8" : "#64748b"),
       textMuted: get("--text-muted", dark ? "#64748b" : "#94a3b8"),
       border: get("--border-color", dark ? "rgba(255,255,255,0.1)" : "#e2e8f0"),
-      accent: get("--accent", dark ? "#38bdf8" : "#2563eb"),
-      ok: get("--ok", dark ? "#34d399" : "#0d9488"),
-      warn: get("--warn", dark ? "#fbbf24" : "#d97706"),
-      danger: get("--danger", dark ? "#fb7185" : "#dc2626"),
-      series: dark
-        ? [get("--accent", "#38bdf8"), get("--ok", "#34d399"), get("--warn", "#fbbf24"), get("--danger", "#fb7185"), "#a78bfa"]
-        : [get("--accent", "#2563eb"), get("--ok", "#0d9488"), get("--warn", "#d97706"), get("--danger", "#dc2626"), "#7c3aed"],
+      accent: get("--accent", dark ? "#7dd3fc" : "#2563eb"),
+      ok: get("--ok", dark ? "#5eead4" : "#0d9488"),
+      warn: get("--warn", dark ? "#fcd34d" : "#d97706"),
+      danger: get("--danger", dark ? "#fda4af" : "#dc2626"),
+      series: ethereal
+        ? ["#7dd3fc", "#5eead4", "#c4b5fd", "#fcd34d", "#fda4af"]
+        : dark
+          ? [get("--accent", "#7dd3fc"), get("--ok", "#5eead4"), get("--warn", "#fcd34d"), get("--danger", "#fda4af"), "#c4b5fd"]
+          : [get("--accent", "#2563eb"), get("--ok", "#0d9488"), get("--warn", "#d97706"), get("--danger", "#dc2626"), "#7c3aed"],
     };
   }
 
@@ -206,7 +228,7 @@
       host.innerHTML = items
         .map(
           (it) =>
-            `<div class="dash-kpi-item"><span class="dash-kpi-label">${esc(tr(it.label))}</span>` +
+            `<div class="dash-kpi-item" title="${esc(tr(it.label))}">${KPI_ICONS[it.key] || ""}<span class="dash-kpi-label">${esc(tr(it.label))}</span>` +
             `<span class="dash-kpi-val ${it.cls}" data-kpi-key="${it.key}">${esc(it.raw === null ? it.val : fmtCompact(it.raw))}</span>` +
             (it.unit ? `<span class="dash-kpi-unit">${esc(tr(it.unit))}</span>` : "") +
             `</div>`,
@@ -1450,7 +1472,7 @@
         kpiHost.innerHTML = kpiItems
           .map(
             (it) =>
-              `<div class="dash-kpi-item"><span class="dash-kpi-label">${esc(tr(it.label))}</span>` +
+              `<div class="dash-kpi-item" title="${esc(tr(it.label))}">${KPI_ICONS[it.key] || ""}<span class="dash-kpi-label">${esc(tr(it.label))}</span>` +
               `<span class="dash-kpi-val ${it.cls}" data-kpi-key="${it.key}">${esc(it.raw === null ? it.val : fmtCompact(it.raw))}</span>` +
               (it.unit ? `<span class="dash-kpi-unit">${esc(tr(it.unit))}</span>` : "") +
               `</div>`,
@@ -1864,7 +1886,11 @@
   function toggleFullscreen() {
     const active = document.body.classList.toggle("dash-fullscreen");
     const btn = $("dash-fullscreen");
-    if (btn) btn.textContent = tr(active ? "退出大屏" : "大屏模式");
+    if (btn) {
+      btn.innerHTML = active ? FS_EXIT_ICON : FS_ENTER_ICON;
+      btn.title = tr(active ? "退出沉浸全屏 (Esc)" : "切换沉浸全屏 (F)");
+      btn.setAttribute("aria-label", btn.title);
+    }
     try {
       if (active && document.documentElement.requestFullscreen && !document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(() => {});
@@ -1935,7 +1961,11 @@
       if (!document.fullscreenElement && document.body.classList.contains("dash-fullscreen")) {
         document.body.classList.remove("dash-fullscreen");
         const btn = $("dash-fullscreen");
-        if (btn) btn.textContent = tr("大屏模式");
+        if (btn) {
+          btn.innerHTML = FS_ENTER_ICON;
+          btn.title = tr("切换沉浸全屏 (F)");
+          btn.setAttribute("aria-label", btn.title);
+        }
       }
       drawScopeCanvas();
       drawTrendCanvas();

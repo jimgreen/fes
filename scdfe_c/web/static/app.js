@@ -1999,8 +1999,15 @@ function cellValue(name, value, table = "") {
   return esc(value);
 }
 function markUpdated() {
-  $("#health").className = "health ok";
-  $("#health span:last-child").textContent = "Web 已连接";
+  const h = $("#health");
+  h.className = "health ok";
+  h.title = "Web 服务在线";
+  h.setAttribute("aria-label", "Web 服务在线");
+  const label = $("#health span:last-child");
+  if (label) {
+    label.innerHTML =
+      '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>';
+  }
   $("#last-updated").textContent =
     "更新于 " + new Date().toLocaleTimeString("zh-CN", { hour12: false });
 }

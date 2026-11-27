@@ -3,6 +3,21 @@
 
   const FOCUS_KEY = "scada.focus.context.v1";
 
+  // 统一高可读极简矢量图标（1.75px 线宽）
+  const UI_ICONS = {
+    connOk: '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>',
+    connErr: '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M5 13a10 10 0 0 1 5.2-2.7"/><circle cx="12" cy="19" r="1.2" fill="currentColor" stroke="none"/></svg>',
+    alertOk: '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 5-3.2 8.2-7 9-3.8-.8-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>',
+    alertWarn: '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9L1.8 18.5A2 2 0 0 0 3.5 21.5h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4.5"/><circle cx="12" cy="17.2" r="0.9" fill="currentColor" stroke="none"/></svg>',
+    search: '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>',
+    c: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.6"/><path d="M5.6 18.4a9 9 0 0 1 0-12.8m12.8 0a9 9 0 0 1 0 12.8M8.8 15.2a4.6 4.6 0 0 1 0-6.4m6.4 0a4.6 4.6 0 0 1 0 6.4"/></svg>',
+    s: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>',
+    t: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h12m0 0-3-3m3 3-3 3M4 17h12m0 0-3-3m3 3-3 3M20 4v16"/></svg>',
+    sbFloat: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="10" height="16" rx="2"/><path d="M17 7h4M17 12h4M17 17h4"/></svg>',
+    sbDock: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>',
+    sbHide: '<svg class="ui-ico ui-ico-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>',
+  };
+
   // ==================== 1. 健康探活 ====================
   async function refreshHealth() {
     const status = document.querySelector("#connection");
@@ -12,11 +27,15 @@
       if (!response.ok) throw new Error("health");
       const result = await response.json();
       if (result.status !== "ok") throw new Error("health");
-      status.textContent = "Web 已连接";
+      status.innerHTML = UI_ICONS.connOk;
+      status.title = "Web 服务在线";
+      status.setAttribute("aria-label", "Web 服务在线");
       status.classList.add("ok");
       status.classList.remove("error", "bad");
     } catch (_) {
-      status.textContent = "Web 连接失败";
+      status.innerHTML = UI_ICONS.connErr;
+      status.title = "Web 服务连接异常";
+      status.setAttribute("aria-label", "Web 服务连接异常");
       status.classList.remove("ok");
       status.classList.add("error");
     }
@@ -330,11 +349,16 @@
       nav.className = "ui-sibling-nav";
       nav.setAttribute("aria-label", "三端系统快捷切换");
       const onOwnDashboard = location.pathname === "/dashboard" || location.pathname === "/dashboard.html";
+      const roleTitles = { c: "采集态势指挥屏 (scdfe_c)", s: "规约仿真实验台 (scdfe_s)", t: "四遥转发枢纽 (scdfe_t)" };
       links.forEach((item) => {
         const targetUrl = buildSiblingUrl(item.url, item.key);
         const a = document.createElement("a");
         a.className = "ui-sibling-link" + (item.active ? " is-active" : "");
-        a.textContent = item.label;
+        const ico = UI_ICONS[item.key] || "";
+        const shortTag = String(item.key || "").toUpperCase();
+        a.innerHTML = `${ico}<span>${shortTag}</span>`;
+        a.title = roleTitles[item.key] || item.label;
+        a.setAttribute("aria-label", roleTitles[item.key] || item.label);
         a.href = targetUrl;
         if (item.active) a.setAttribute("aria-current", "true");
         a.onclick = (e) => {
@@ -399,10 +423,13 @@
     const total = Number(data.total || 0);
     const hasErr = (data.counts?.thread_errors || 0) + (data.counts?.process_errors || 0) + (data.counts?.failed_commands || 0) > 0;
     chipBtn.className = "ui-alert-chip " + (total === 0 ? "is-ok" : (hasErr ? "is-err" : "is-warn"));
-    chipBtn.textContent = total === 0 ? "✓ 正常" : `⚠ 异常 ${total}`;
+    chipBtn.innerHTML = total === 0
+      ? UI_ICONS.alertOk
+      : `${UI_ICONS.alertWarn}<span>${total}</span>`;
     chipBtn.title = total === 0
-      ? "运行态无异常告警"
-      : `线程异常 ${data.counts?.thread_errors || 0} · 进程异常 ${data.counts?.process_errors || 0} · 对账偏差 ${data.counts?.trace_diffs || 0} · 指令失败 ${data.counts?.failed_commands || 0}`;
+      ? "运行态正常，无异常告警"
+      : `异常 ${total} · 线程 ${data.counts?.thread_errors || 0} · 进程 ${data.counts?.process_errors || 0} · 偏差 ${data.counts?.trace_diffs || 0} · 指令 ${data.counts?.failed_commands || 0}`;
+    chipBtn.setAttribute("aria-label", chipBtn.title);
     if (alertPopoverOpen) renderAlertPopover(data);
   }
 
@@ -693,8 +720,9 @@
     btn.type = "button";
     btn.id = "ui-cmdk-btn";
     btn.className = "ui-cmdk-btn";
-    btn.title = "全局命令与快速跳转 (Ctrl+K)";
-    btn.innerHTML = '<span>速查</span><kbd>Ctrl+K</kbd>';
+    btn.title = "全局速查与跳转 (Ctrl+K)";
+    btn.setAttribute("aria-label", "全局速查 (Ctrl+K)");
+    btn.innerHTML = UI_ICONS.search;
     btn.onclick = openCmdk;
     tools.prepend(btn);
   }
@@ -732,10 +760,10 @@
     bar.className = "ui-sidebar-bar";
     bar.innerHTML =
       '<div class="ui-sidebar-mode-seg" role="group" aria-label="左栏模式">' +
-      '<button type="button" class="ui-sidebar-mode-btn" data-sb-mode="float">悬浮</button>' +
-      '<button type="button" class="ui-sidebar-mode-btn" data-sb-mode="dock">内嵌</button>' +
+      `<button type="button" class="ui-sidebar-mode-btn" data-sb-mode="float" title="悬浮模式">${UI_ICONS.sbFloat}<span>悬浮</span></button>` +
+      `<button type="button" class="ui-sidebar-mode-btn" data-sb-mode="dock" title="内嵌模式">${UI_ICONS.sbDock}<span>内嵌</span></button>` +
       '</div>' +
-      '<button type="button" id="ui-sidebar-hide" class="ui-sidebar-hide-btn" title="隐藏左栏" aria-label="隐藏左栏">⟨</button>';
+      `<button type="button" id="ui-sidebar-hide" class="ui-sidebar-hide-btn" title="隐藏左栏" aria-label="隐藏左栏">${UI_ICONS.sbHide}</button>`;
     sidebar.prepend(bar);
 
     // 顶栏品牌左侧极简侧栏显隐开关按钮（悬浮/内嵌两种模式均可随时呼出或隐藏）
