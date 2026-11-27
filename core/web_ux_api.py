@@ -939,6 +939,437 @@ def read_chain_overview(store, component: str, query: dict) -> dict:
     }
 
 
+def read_dashboard_overview(store, component: str) -> dict:
+    """为 C / S / T 三端大屏主页面提供单次高密度实时业务聚合快照。"""
+    import time
+
+    now_ms = int(time.time() * 1000)
+    points_by_kind = {"yc": 0, "yx": 0, "yk": 0, "yt": 0}
+    yx_state = {"zero": 0, "one": 0, "other": 0}
+    yx_matrix: list[dict] = []
+    diff_samples: list[dict] = []
+    mapping_by_kind = {k: {"total": 0, "mapped": 0} for k in ("yc", "yx", "yk", "yt")}
+    channels: list[dict] = []
+    source_rtus: list[dict] = []
+    protocols_map: dict[str, dict] = {}
+    top_yc: list[dict] = []
+    processes: list[dict] = []
+    clients: list[dict] = []
+    events: list[dict] = []
+    alerts = read_alerts_summary(store, component)
+
+    rx_total = 0
+    tx_total = 0
+    err_total = 0
+    active_clients = 0
+    mapped_points_total = 0
+    diff_points_total = 0
+
+    def _add_proto(proto: str, state: str, pts: int) -> None:
+        key = (proto or "unknown").lower()
+        rec = protocols_map.setdefault(key, {"protocol": key, "count": 0, "running": 0, "error": 0, "points": 0})
+        rec["count"] += 1
+        if state == "running":
+            rec["running"] += 1
+        elif state == "error":
+            rec["error"] += 1
+        rec["points"] += int(pts or 0)
+
+    try:
+        with store.connection() as con:
+            tables = _existing_tables(con)
+
+            # 1. 四遥点总数与 YX 分/合位比例
+            per_rtu_points: dict[int, int] = {}
+            for kind, tbl in _KIND_TABLES.items():
+                if tbl not in tables:
+                    continue
+                try:
+                    c_row = con.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()
+                    cnt = int(c_row[0] or 0) if c_row else 0
+                    points_by_kind[kind] = cnt
+                    mapping_by_kind[kind]["total"] = cnt
+                    for grp in con.execute(f"SELECT rtu_id, COUNT(*) FROM {tbl} GROUP BY rtu_id").fetchall():
+                        rid = int(grp[0])
+                        per_rtu_points[rid] = per_rtu_points.get(rid, 0) + int(grp[1] or 0)
+                except sqlite3.Error:
+                    pass
+
+            if "fes_yx_define" in tables:
+                try:
+                    for yr in con.execute("SELECT value, COUNT(*) FROM fes_yx_define GROUP BY value").fetchall():
+                        v, cnt = yr[0], int(yr[1] or 0)
+                        if v == 0 or v == 0.0:
+                            yx_state["zero"] += cnt
+                        elif v == 1 or v == 1.0:
+                            yx_state["one"] += cnt
+                        else:
+                            yx_state["other"] += cnt
+                    for ym in con.execute(
+                        "SELECT rtu_id, pnt_no, name, value FROM fes_yx_define ORDER BY rtu_id ASC, pnt_no ASC LIMIT 32"
+                    ).fetchall():
+                        yx_matrix.append({
+                            "rtu_id": ym["rtu_id"],
+                            "pnt_no": ym["pnt_no"],
+                            "name": ym["name"] or f"YX#{ym['pnt_no']}",
+                            "value": ym["value"],
+                        })
+                except sqlite3.Error:
+                    pass
+
+            # 2. 重点 YC 实时工程值快照（取绝对值/活跃靠前的 Top 10）
+            if "fes_yc_define" in tables:
+                try:
+                    yc_rows = con.execute(
+                        "SELECT rtu_id, pnt_no, name, value, status, refresh_time FROM fes_yc_define "
+                        "WHERE value IS NOT NULL "
+                        "ORDER BY COALESCE(refresh_time, 0) DESC, ABS(CAST(value AS REAL)) DESC, rtu_id ASC, pnt_no ASC LIMIT 10"
+                    ).fetchall()
+                    for yr in yc_rows:
+                        try:
+                            fval = float(yr["value"])
+                        except (TypeError, ValueError):
+                            fval = 0.0
+                        top_yc.append({
+                            "rtu_id": yr["rtu_id"],
+                            "pnt_no": yr["pnt_no"],
+                            "name": yr["name"] or f"YC#{yr['pnt_no']}",
+                            "value": round(fval, 4),
+                            "status": int(yr["status"] or 0),
+                        })
+                except sqlite3.Error:
+                    pass
+
+            # 3. 运行态流量快照（fes_channel_runtime_status）
+            rt_by_ch: dict[int, dict] = {}
+            if "fes_channel_runtime_status" in tables:
+                try:
+                    svc_filter = {
+                        "c": "service_name = 'scdfe_c'",
+                        "t": "service_name = 'scdfe_t'",
+                        "s": "service_name LIKE 'scdfe_s%'",
+                    }.get(component, "1=1")
+                    for r in con.execute(
+                        f"SELECT channel_id, service_name, state, running, connection_state, process_status, "
+                        f"rx_count, tx_count, error_count, process_heartbeat_time, last_error "
+                        f"FROM fes_channel_runtime_status WHERE {svc_filter}"
+                    ).fetchall():
+                        cid = int(r["channel_id"])
+                        rt_by_ch[cid] = dict(r)
+                except sqlite3.Error:
+                    pass
+
+            # 4. 核心进程状态
+            if "fes_process_define" in tables:
+                try:
+                    for pr in con.execute(
+                        "SELECT process_key, kind, target_rtu, process_status, process_pid, process_error "
+                        "FROM fes_process_define ORDER BY CASE kind WHEN 'main' THEN 0 WHEN 'writer' THEN 1 WHEN 'command-server' THEN 2 ELSE 3 END, target_rtu"
+                    ).fetchall():
+                        processes.append({
+                            "key": pr["process_key"],
+                            "kind": pr["kind"],
+                            "status": int(pr["process_status"] or 0),
+                            "pid": int(pr["process_pid"] or 0),
+                            "alive": bool(pr["process_pid"]),
+                            "error": pr["process_error"] or "",
+                        })
+                except sqlite3.Error:
+                    pass
+
+            # 5. 客户端连接历史（只读探测对应组件的 .connections.db）
+            clients_per_ch: dict[int, int] = {}
+            try:
+                from core.connection_history import history_path
+                conn_db = history_path(store.db_path, component)
+                if conn_db.is_file():
+                    ccon = sqlite3.connect(f"file:{conn_db}?mode=ro", uri=True, timeout=0.5)
+                    ccon.row_factory = sqlite3.Row
+                    try:
+                        crows = ccon.execute(
+                            "SELECT peer, protocol, channel_id, rtu_id, state, closed, rx_count, tx_count, updated "
+                            "FROM connection_session WHERE removed = 0 ORDER BY (closed IS NULL) DESC, updated DESC LIMIT 12"
+                        ).fetchall()
+                        for cr in crows:
+                            is_open = cr["closed"] is None
+                            if is_open:
+                                active_clients += 1
+                                cid_key = cr["channel_id"] if cr["channel_id"] is not None else cr["rtu_id"]
+                                if cid_key is not None:
+                                    clients_per_ch[int(cid_key)] = clients_per_ch.get(int(cid_key), 0) + 1
+                            clients.append({
+                                "peer": cr["peer"] or "—",
+                                "protocol": cr["protocol"] or "—",
+                                "channel_id": cr["channel_id"] if cr["channel_id"] is not None else cr["rtu_id"],
+                                "state": "online" if is_open else "closed",
+                                "rx": int(cr["rx_count"] or 0),
+                                "tx": int(cr["tx_count"] or 0),
+                                "updated_ms": int((cr["updated"] or 0) * 1000),
+                            })
+                    finally:
+                        ccon.close()
+            except Exception:
+                pass
+
+            # 6. 通道/RTU 列表与专属指标
+            if component == "t":
+                # 源 RTU 简要池（拓扑左侧）
+                if "fes_rtu_define" in tables:
+                    try:
+                        for rr in con.execute(
+                            "SELECT rtu_id, name, channel_type, process_status FROM fes_rtu_define ORDER BY rtu_id ASC LIMIT 12"
+                        ).fetchall():
+                            p_st = int(rr["process_status"] or 0)
+                            source_rtus.append({
+                                "rtu_id": rr["rtu_id"],
+                                "name": rr["name"] or f"RTU {rr['rtu_id']}",
+                                "protocol": rr["channel_type"] or "—",
+                                "state": "error" if p_st == 5 else ("running" if p_st == 2 else "stopped"),
+                                "points": per_rtu_points.get(int(rr["rtu_id"]), 0),
+                            })
+                    except sqlite3.Error:
+                        pass
+
+                mapped_per_ch: dict[int, int] = {}
+                if "fes_scdfe_t_point_define" in tables:
+                    try:
+                        for mr in con.execute(
+                            "SELECT channel_id, COUNT(*) FROM fes_scdfe_t_point_define GROUP BY channel_id"
+                        ).fetchall():
+                            mapped_per_ch[int(mr[0])] = int(mr[1] or 0)
+                            mapped_points_total += int(mr[1] or 0)
+                        for kr in con.execute(
+                            "SELECT LOWER(kind), COUNT(*) FROM fes_scdfe_t_point_define GROUP BY LOWER(kind)"
+                        ).fetchall():
+                            k = str(kr[0] or "")
+                            if k in mapping_by_kind:
+                                mapping_by_kind[k]["mapped"] = int(kr[1] or 0)
+                        for kind, tbl in (("yc", "fes_yc_define"), ("yx", "fes_yx_define")):
+                            if tbl not in tables:
+                                continue
+                            dc = con.execute(
+                                f"SELECT COUNT(*) FROM fes_scdfe_t_point_define tp "
+                                f"JOIN {tbl} s ON s.rtu_id = tp.source_rtu_id AND s.pnt_no = tp.source_pnt_no "
+                                f"WHERE LOWER(tp.kind) = ? AND tp.enabled != 0 "
+                                f"AND s.value IS NOT NULL AND tp.last_value IS NOT NULL "
+                                f"AND ABS(CAST(s.value AS REAL) - CAST(tp.last_value AS REAL)) > 1e-4",
+                                (kind,),
+                            ).fetchone()
+                            diff_points_total += int(dc[0] or 0) if dc else 0
+                            for dr in con.execute(
+                                f"SELECT tp.channel_id, tp.source_rtu_id, tp.source_pnt_no, s.name, s.value AS src_val, tp.last_value AS fwd_val "
+                                f"FROM fes_scdfe_t_point_define tp "
+                                f"JOIN {tbl} s ON s.rtu_id = tp.source_rtu_id AND s.pnt_no = tp.source_pnt_no "
+                                f"WHERE LOWER(tp.kind) = ? AND tp.enabled != 0 "
+                                f"AND s.value IS NOT NULL AND tp.last_value IS NOT NULL "
+                                f"AND ABS(CAST(s.value AS REAL) - CAST(tp.last_value AS REAL)) > 1e-4 LIMIT 6",
+                                (kind,),
+                            ).fetchall():
+                                diff_samples.append({
+                                    "kind": kind,
+                                    "channel_id": dr["channel_id"],
+                                    "rtu_id": dr["source_rtu_id"],
+                                    "pnt_no": dr["source_pnt_no"],
+                                    "name": dr["name"] or f"{kind.upper()}#{dr['source_pnt_no']}",
+                                    "src_value": dr["src_val"],
+                                    "fwd_value": dr["fwd_val"],
+                                })
+                    except sqlite3.Error:
+                        pass
+
+                if "fes_scdfe_t_define" in tables:
+                    try:
+                        trows = con.execute(
+                            "SELECT channel_id, name, protocol, bind_port, process_enable, process_status, process_heartbeat_time, process_error "
+                            "FROM fes_scdfe_t_define ORDER BY channel_id ASC"
+                        ).fetchall()
+                        for tr in trows:
+                            cid = int(tr["channel_id"])
+                            rt = rt_by_ch.get(cid, {})
+                            p_st = int(rt.get("process_status") if rt.get("process_status") is not None else (tr["process_status"] or 0))
+                            st = "error" if (p_st == 5 or tr["process_error"]) else ("running" if (p_st == 2 or rt.get("running")) else "stopped")
+                            rx = int(rt.get("rx_count") or 0)
+                            tx = int(rt.get("tx_count") or 0)
+                            err = int(rt.get("error_count") or 0)
+                            pts = mapped_per_ch.get(cid, 0)
+                            rx_total += rx
+                            tx_total += tx
+                            err_total += err
+                            _add_proto(tr["protocol"] or "iec104", st, pts)
+                            channels.append({
+                                "id": cid,
+                                "rtu_id": None,
+                                "name": tr["name"] or f"转发通道 {cid}",
+                                "protocol": tr["protocol"] or "iec104",
+                                "state": st,
+                                "enabled": int(tr["process_enable"] or 0),
+                                "rx": rx,
+                                "tx": tx,
+                                "err": err,
+                                "points": pts,
+                                "mapped": pts,
+                                "clients": clients_per_ch.get(cid, 0),
+                                "bind_port": tr["bind_port"],
+                                "heartbeat_ms": int(rt.get("process_heartbeat_time") or tr["process_heartbeat_time"] or 0),
+                                "last_error": str(rt.get("last_error") or tr["process_error"] or ""),
+                            })
+                    except sqlite3.Error:
+                        pass
+            else:
+                # C 端与 S 端均基于 fes_rtu_define
+                if "fes_rtu_define" in tables:
+                    try:
+                        rrows = con.execute(
+                            "SELECT rtu_id, name, channel_id, channel_type, process_enable, process_status, process_heartbeat_time, process_error "
+                            "FROM fes_rtu_define ORDER BY rtu_id ASC"
+                        ).fetchall()
+                        for rr in rrows:
+                            rid = int(rr["rtu_id"])
+                            cid = int(rr["channel_id"]) if rr["channel_id"] is not None else rid
+                            rt = rt_by_ch.get(cid) or rt_by_ch.get(rid) or {}
+                            p_st = int(rt.get("process_status") if rt.get("process_status") is not None else (rr["process_status"] or 0))
+                            st = "error" if (p_st == 5 or rr["process_error"]) else ("running" if (p_st == 2 or rt.get("running")) else "stopped")
+                            rx = int(rt.get("rx_count") or 0)
+                            tx = int(rt.get("tx_count") or 0)
+                            err = int(rt.get("error_count") or 0)
+                            pts = per_rtu_points.get(rid, 0)
+                            rx_total += rx
+                            tx_total += tx
+                            err_total += err
+                            _add_proto(rr["channel_type"] or "unknown", st, pts)
+                            channels.append({
+                                "id": cid,
+                                "rtu_id": rid,
+                                "name": rr["name"] or f"RTU {rid}",
+                                "protocol": rr["channel_type"] or "unknown",
+                                "state": st,
+                                "enabled": int(rr["process_enable"] or 0),
+                                "rx": rx,
+                                "tx": tx,
+                                "err": err,
+                                "points": pts,
+                                "mapped": 0,
+                                "clients": clients_per_ch.get(cid, 0) or clients_per_ch.get(rid, 0),
+                                "bind_port": None,
+                                "heartbeat_ms": int(rt.get("process_heartbeat_time") or rr["process_heartbeat_time"] or 0),
+                                "last_error": str(rt.get("last_error") or rr["process_error"] or ""),
+                            })
+                    except sqlite3.Error:
+                        pass
+
+            # 7. 动态实时事件流（聚合告警 + 最近 SOE + 最近指令 + 最近客户端连接）
+            for al in alerts.get("items", [])[:6]:
+                events.append({
+                    "time_ms": now_ms,
+                    "category": al.get("category") or "告警",
+                    "severity": "err" if al.get("severity") == "error" else "warn",
+                    "title": al.get("title") or "",
+                    "detail": al.get("detail") or "",
+                    "href": al.get("href") or "/",
+                    "rtu_id": al.get("rtu_id"),
+                })
+
+            if "fes_soe_event" in tables:
+                try:
+                    for sr in con.execute(
+                        "SELECT id, rtu_id, pnt_no, value, event_time, received_at FROM fes_soe_event ORDER BY id DESC LIMIT 6"
+                    ).fetchall():
+                        events.append({
+                            "time_ms": int(sr["received_at"] or sr["event_time"] or now_ms),
+                            "category": "SOE 变位",
+                            "severity": "info",
+                            "title": f"RTU {sr['rtu_id']} YX#{sr['pnt_no']} → {sr['value']}",
+                            "detail": f"事件 #{sr['id']}",
+                            "href": f"/soe?rtu_id={sr['rtu_id']}",
+                            "rtu_id": sr["rtu_id"],
+                        })
+                except sqlite3.Error:
+                    pass
+
+            if "fes_command_trace" in tables:
+                try:
+                    for cr in con.execute(
+                        "SELECT command_id, rtu_id, kind, pnt_no, stage, detail, created_at FROM fes_command_trace ORDER BY created_at DESC LIMIT 6"
+                    ).fetchall():
+                        st = str(cr["stage"] or "")
+                        events.append({
+                            "time_ms": int(cr["created_at"] or now_ms),
+                            "category": "指令追踪",
+                            "severity": "err" if st == "failed" else ("ok" if st in ("protocol_confirmed", "driver_completed", "received") else "info"),
+                            "title": f"#{cr['command_id']} RTU {cr['rtu_id']} {str(cr['kind'] or '').upper()}#{cr['pnt_no']}",
+                            "detail": f"{st} {cr['detail'] or ''}".strip()[:80],
+                            "href": f"/command-traces?rtu_id={cr['rtu_id']}",
+                            "rtu_id": cr["rtu_id"],
+                        })
+                except sqlite3.Error:
+                    pass
+
+            for cl in clients[:4]:
+                events.append({
+                    "time_ms": cl["updated_ms"] or now_ms,
+                    "category": "客户端连接",
+                    "severity": "ok" if cl["state"] == "online" else "info",
+                    "title": f"{cl['protocol'].upper()} · {cl['peer']}",
+                    "detail": f"{'在线' if cl['state'] == 'online' else '已断开'} · 收 {cl['rx']} / 发 {cl['tx']}",
+                    "href": "/connections",
+                    "rtu_id": None,
+                })
+    except sqlite3.Error:
+        pass
+
+    ch_total = len(channels)
+    ch_running = sum(1 for c in channels if c["state"] == "running")
+    ch_error = sum(1 for c in channels if c["state"] == "error")
+    ch_stopped = ch_total - ch_running - ch_error
+    points_total = sum(points_by_kind.values())
+
+    # 综合健康度评分（0~100）
+    score = 100
+    if ch_total > 0:
+        score -= int(round((ch_error / ch_total) * 45))
+        if ch_running == 0 and ch_error == 0:
+            score -= 15
+    proc_err = sum(1 for p in processes if p["status"] == 5)
+    score -= min(25, proc_err * 8)
+    score -= min(20, diff_points_total * 2)
+    score = max(0, min(100, score))
+
+    events.sort(key=lambda e: int(e.get("time_ms") or 0), reverse=True)
+    protocols = sorted(protocols_map.values(), key=lambda x: (-x["points"], -x["count"], x["protocol"]))
+
+    return {
+        "component": component,
+        "timestamp_ms": now_ms,
+        "health_score": score,
+        "kpis": {
+            "channels_total": ch_total,
+            "channels_running": ch_running,
+            "channels_error": ch_error,
+            "channels_stopped": ch_stopped,
+            "points_total": points_total,
+            "rx_total": rx_total,
+            "tx_total": tx_total,
+            "err_total": err_total,
+            "active_clients": active_clients,
+            "alerts_total": int(alerts.get("total") or 0),
+            "mapped_points": mapped_points_total,
+            "diff_points": diff_points_total,
+        },
+        "points_by_kind": points_by_kind,
+        "yx_state": yx_state,
+        "yx_matrix": yx_matrix,
+        "diff_samples": diff_samples[:8],
+        "mapping_by_kind": mapping_by_kind,
+        "protocols": protocols,
+        "channels": channels[:24],
+        "source_rtus": source_rtus[:12],
+        "top_yc": top_yc,
+        "processes": processes[:12],
+        "clients": clients[:12],
+        "events": events[:14],
+    }
+
+
 def workbench_links_payload(handler, component: str) -> dict:
     """返回 C/S/T 三端服务快捷跳转配置及当前安全权限态。"""
     host = "127.0.0.1"
@@ -1025,6 +1456,29 @@ def handle_ux_api(handler, parts, query, method, store, component):
             raise ApiError(405, "报文译码只支持 POST")
         body = handler._body()
         return handler._json(200, decode_packet_payload(body))
+
+    if parts in (["dashboard"], ["static", "dashboard.css"], ["static", "dashboard.js"]):
+        if method != "GET":
+            raise ApiError(405, "只支持 GET")
+        if parts[0] == "static":
+            mime = "text/css" if parts[1].endswith(".css") else "application/javascript"
+            return send_static(handler, assets / parts[1], mime + "; charset=utf-8")
+        tpl_name = f"dashboard-{component}.html" if component in ("c", "s", "t") else "dashboard.html"
+        tpl_path = assets / tpl_name if (assets / tpl_name).is_file() else assets / "dashboard.html"
+        if component in ("c", "t", "s"):
+            return send_static(
+                handler,
+                tpl_path,
+                "text/html; charset=utf-8",
+                transform=lambda raw: render_workbench(raw, component, "dashboard.html"),
+                cache_key=f"workbench:{component}:{tpl_name}",
+            )
+        return send_static(handler, tpl_path, "text/html; charset=utf-8")
+
+    if parts == ["api", "dashboard-overview"]:
+        if method != "GET":
+            raise ApiError(405, "大屏总览接口只支持 GET")
+        return handler._json(200, read_dashboard_overview(store, component))
 
     if parts in (["point-trace"], ["static", "point-trace.css"], ["static", "point-trace.js"]):
         if method != "GET":

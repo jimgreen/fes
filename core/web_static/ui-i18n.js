@@ -432,7 +432,7 @@
     }
     if (event.altKey && !event.ctrlKey && !event.metaKey && (event.key === "r" || event.key === "R")) {
       if (document.querySelector("dialog[open]")) return;
-      const refreshIds = ["#refresh", "#points-refresh", "#test-refresh", "#scdfe-refresh", "#process-refresh", "#logs-refresh", "#lb-refresh", "#pt-refresh"];
+      const refreshIds = ["#refresh", "#points-refresh", "#test-refresh", "#scdfe-refresh", "#process-refresh", "#logs-refresh", "#lb-refresh", "#pt-refresh", "#dash-refresh"];
       for (const sel of refreshIds) {
         const btn = document.querySelector(sel);
         if (btn && btn.offsetParent !== null && !btn.disabled && !btn.closest("[hidden]")) {

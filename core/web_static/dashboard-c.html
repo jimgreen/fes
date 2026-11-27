@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="minimalist-light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>采集态势指挥屏 · SCADA</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/ui-theme.css">
+  <script defer src="/static/dashboard.js"></script>
+</head>
+<body data-dashboard="1" data-dash-role="c">
+  <header><strong>SCADA · 采集态势指挥屏</strong><a href="/">返回工作台</a></header>
+  <main>
+    <section class="dash-root" id="dash-root" aria-label="采集端态势指挥大屏">
+      <div class="dash-strip">
+        <div class="dash-strip-title">
+          <span class="dash-live-dot" id="dash-live-dot" aria-hidden="true"></span>
+          <strong id="dash-theme-title">采集态势指挥屏</strong>
+          <span class="dash-role-tag" id="dash-role-tag">scdfe_c · 采集引擎</span>
+        </div>
+        <div class="dash-kpis" id="dash-kpis" aria-label="采集核心指标"></div>
+        <div class="dash-controls">
+          <span class="dash-clock" id="dash-clock">--:--:--</span>
+          <select id="dash-interval" class="dash-select" aria-label="刷新周期">
+            <option value="2000" selected>2s</option>
+            <option value="5000">5s</option>
+            <option value="10000">10s</option>
+            <option value="0">暂停</option>
+          </select>
+          <button type="button" id="dash-refresh" class="dash-btn" title="立即刷新 (Alt+R)">刷新</button>
+          <button type="button" id="dash-fullscreen" class="dash-btn is-accent" title="切换大屏沉浸模式 (F)">大屏模式</button>
+        </div>
+      </div>
+
+      <!-- C 端专属：左-中-右三列指挥中心布局 -->
+      <div class="dash-layout-c">
+        <!-- 左列：健康双环仪 + 规约接入环形饼图 -->
+        <div class="dash-col">
+          <article class="dash-card dash-grow-1">
+            <div class="dash-card-head">
+              <h2>采集健康与在线态势</h2>
+              <span class="dash-card-meta" id="dash-gauge-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-gauge-wrap">
+              <div class="dash-gauge-svg-host" id="dash-gauge-svg"></div>
+              <div class="dash-gauge-stats" id="dash-gauge-stats"></div>
+            </div>
+          </article>
+          <article class="dash-card dash-grow-1">
+            <div class="dash-card-head">
+              <h2>规约接入构成环图</h2>
+              <span class="dash-card-meta" id="dash-donut-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-donut-wrap">
+              <div class="dash-donut-svg-host" id="dash-donut-svg"></div>
+              <div class="dash-donut-legend" id="dash-donut-legend"></div>
+            </div>
+          </article>
+        </div>
+
+        <!-- 中列（主视觉）：多规约汇流拓扑 + 实时吞吐面积双曲线 -->
+        <div class="dash-col dash-col-center">
+          <article class="dash-card dash-grow-14">
+            <div class="dash-card-head">
+              <h2>多规约实时汇流拓扑</h2>
+              <span class="dash-card-meta" id="dash-topo-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-topo-wrap" id="dash-topo-host"></div>
+          </article>
+          <article class="dash-card dash-grow-10">
+            <div class="dash-card-head">
+              <h2>实时收发帧吞吐曲线</h2>
+              <div class="dash-legend" id="dash-trend-legend"></div>
+            </div>
+            <div class="dash-card-body dash-canvas-wrap">
+              <canvas id="dash-trend-canvas" class="dash-canvas"></canvas>
+              <div id="dash-trend-tip" class="dash-tooltip" hidden></div>
+            </div>
+          </article>
+        </div>
+
+        <!-- 右列：通道流量柱状图 + 四遥/YC 棒图 + 核心进程事件流 -->
+        <div class="dash-col">
+          <article class="dash-card dash-grow-10">
+            <div class="dash-card-head">
+              <h2>RTU 通道流量排行</h2>
+              <div class="dash-legend" id="dash-bar-legend"></div>
+            </div>
+            <div class="dash-card-body dash-canvas-wrap">
+              <canvas id="dash-bar-canvas" class="dash-canvas"></canvas>
+              <div id="dash-bar-tip" class="dash-tooltip" hidden></div>
+            </div>
+          </article>
+          <article class="dash-card dash-grow-9">
+            <div class="dash-card-head">
+              <h2>四遥构成与重点遥测</h2>
+              <div class="dash-seg" id="dash-hbar-tabs" role="tablist">
+                <button type="button" class="is-active" data-hbar-tab="primary" role="tab" aria-selected="true">分布</button>
+                <button type="button" data-hbar-tab="live" role="tab" aria-selected="false">实时 YC</button>
+              </div>
+            </div>
+            <div class="dash-card-body dash-hbar-wrap" id="dash-hbar-host"></div>
+          </article>
+          <article class="dash-card dash-grow-10">
+            <div class="dash-card-head">
+              <h2>采集动态与核心进程</h2>
+              <span class="dash-card-meta" id="dash-feed-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-feed-wrap">
+              <div class="dash-proc-bar" id="dash-proc-bar" hidden></div>
+              <div class="dash-feed-list" id="dash-feed-list"></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

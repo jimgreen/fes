@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="minimalist-light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>总览大屏 · SCADA</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/ui-theme.css">
+  <script defer src="/static/dashboard.js"></script>
+</head>
+<body data-dashboard="1">
+  <header><strong>SCADA · 总览大屏</strong><a href="/">返回工作台</a></header>
+  <main>
+    <section class="dash-root" id="dash-root" aria-label="业务态势可视化大屏">
+      <!-- 单行紧凑指挥指标条（36px） -->
+      <div class="dash-strip">
+        <div class="dash-strip-title">
+          <span class="dash-live-dot" id="dash-live-dot" aria-hidden="true"></span>
+          <strong id="dash-theme-title">实时运行态势大屏</strong>
+          <span class="dash-role-tag" id="dash-role-tag">—</span>
+        </div>
+        <div class="dash-kpis" id="dash-kpis" aria-label="核心运行指标"></div>
+        <div class="dash-controls">
+          <span class="dash-clock" id="dash-clock" title="当前系统时间">--:--:--</span>
+          <select id="dash-interval" class="dash-select" aria-label="刷新周期">
+            <option value="2000" selected>2s</option>
+            <option value="5000">5s</option>
+            <option value="10000">10s</option>
+            <option value="0">暂停</option>
+          </select>
+          <button type="button" id="dash-refresh" class="dash-btn" title="立即刷新 (Alt+R)">刷新</button>
+          <button type="button" id="dash-fullscreen" class="dash-btn is-accent" title="切换大屏沉浸模式 (F)">大屏模式</button>
+        </div>
+      </div>
+
+      <!-- 2x3 满屏高密度动态可视化画布矩阵 -->
+      <div class="dash-grid">
+        <!-- 上排左：动态双环仪表盘 -->
+        <article class="dash-card dash-area-gauge">
+          <div class="dash-card-head">
+            <h2 id="dash-gauge-title">运行健康态势</h2>
+            <span class="dash-card-meta" id="dash-gauge-meta">—</span>
+          </div>
+          <div class="dash-card-body dash-gauge-wrap">
+            <div class="dash-gauge-svg-host" id="dash-gauge-svg"></div>
+            <div class="dash-gauge-stats" id="dash-gauge-stats"></div>
+          </div>
+        </article>
+
+        <!-- 上排中（核心视觉锚点）：动态脉冲业务拓扑 -->
+        <article class="dash-card dash-area-topo">
+          <div class="dash-card-head">
+            <h2 id="dash-topo-title">实时业务流向拓扑</h2>
+            <span class="dash-card-meta" id="dash-topo-meta">—</span>
+          </div>
+          <div class="dash-card-body dash-topo-wrap" id="dash-topo-host"></div>
+        </article>
+
+        <!-- 上排右：实时平滑双曲线趋势图 -->
+        <article class="dash-card dash-area-trend">
+          <div class="dash-card-head">
+            <h2 id="dash-trend-title">实时吞吐趋势</h2>
+            <div class="dash-legend" id="dash-trend-legend"></div>
+          </div>
+          <div class="dash-card-body dash-canvas-wrap">
+            <canvas id="dash-trend-canvas" class="dash-canvas"></canvas>
+            <div id="dash-trend-tip" class="dash-tooltip" hidden></div>
+          </div>
+        </article>
+
+        <!-- 下排左：分组/堆叠动态柱状图 -->
+        <article class="dash-card dash-area-bar">
+          <div class="dash-card-head">
+            <h2 id="dash-bar-title">通道业务活跃排行</h2>
+            <div class="dash-legend" id="dash-bar-legend"></div>
+          </div>
+          <div class="dash-card-body dash-canvas-wrap">
+            <canvas id="dash-bar-canvas" class="dash-canvas"></canvas>
+            <div id="dash-bar-tip" class="dash-tooltip" hidden></div>
+          </div>
+        </article>
+
+        <!-- 下排中：多维对比动态水平棒图 -->
+        <article class="dash-card dash-area-hbar">
+          <div class="dash-card-head">
+            <h2 id="dash-hbar-title">四遥分布与实时量测</h2>
+            <div class="dash-seg" id="dash-hbar-tabs" role="tablist">
+              <button type="button" class="is-active" data-hbar-tab="primary" role="tab" aria-selected="true">分布棒图</button>
+              <button type="button" data-hbar-tab="live" role="tab" aria-selected="false">实时量测</button>
+            </div>
+          </div>
+          <div class="dash-card-body dash-hbar-wrap" id="dash-hbar-host"></div>
+        </article>
+
+        <!-- 下排右：实时动态事件流与核心进程 -->
+        <article class="dash-card dash-area-feed">
+          <div class="dash-card-head">
+            <h2 id="dash-feed-title">实时动态与状态流</h2>
+            <span class="dash-card-meta" id="dash-feed-meta">—</span>
+          </div>
+          <div class="dash-card-body dash-feed-wrap">
+            <div class="dash-proc-bar" id="dash-proc-bar" hidden></div>
+            <div class="dash-feed-list" id="dash-feed-list"></div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

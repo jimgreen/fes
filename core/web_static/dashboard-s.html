@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="minimalist-light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>规约仿真实验台大屏 · SCADA</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <link rel="stylesheet" href="/static/ui-theme.css">
+  <script defer src="/static/dashboard.js"></script>
+</head>
+<body data-dashboard="1" data-dash-role="s">
+  <header><strong>SCADA · 规约仿真实验台大屏</strong><a href="/">返回工作台</a></header>
+  <main>
+    <section class="dash-root" id="dash-root" aria-label="仿真端规约实验台大屏">
+      <div class="dash-strip">
+        <div class="dash-strip-title">
+          <span class="dash-live-dot" id="dash-live-dot" aria-hidden="true"></span>
+          <strong id="dash-theme-title">规约仿真实验台大屏</strong>
+          <span class="dash-role-tag" id="dash-role-tag">scdfe_s · 规约仿真</span>
+        </div>
+        <div class="dash-kpis" id="dash-kpis" aria-label="仿真核心指标"></div>
+        <div class="dash-controls">
+          <span class="dash-clock" id="dash-clock">--:--:--</span>
+          <select id="dash-interval" class="dash-select" aria-label="刷新周期">
+            <option value="2000" selected>2s</option>
+            <option value="5000">5s</option>
+            <option value="10000">10s</option>
+            <option value="0">暂停</option>
+          </select>
+          <button type="button" id="dash-refresh" class="dash-btn" title="立即刷新 (Alt+R)">刷新</button>
+          <button type="button" id="dash-fullscreen" class="dash-btn is-accent" title="切换大屏沉浸模式 (F)">大屏模式</button>
+        </div>
+      </div>
+
+      <!-- S 端专属：上示波器波形+仿真服务矩阵 / 下三栏仪器台 -->
+      <div class="dash-layout-s">
+        <div class="dash-s-top">
+          <!-- 上左主视觉：多通道实时仿真示波器 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>多通道实时仿真示波器</h2>
+              <div class="dash-head-right">
+                <div class="dash-legend" id="dash-scope-legend"></div>
+                <div class="dash-seg" id="dash-scope-tabs" role="tablist">
+                  <button type="button" class="is-active" data-scope-mode="sync" role="tab" aria-selected="true">实测同步</button>
+                  <button type="button" data-scope-mode="wave" role="tab" aria-selected="false">激励参考波</button>
+                </div>
+              </div>
+            </div>
+            <div class="dash-card-body dash-scope-wrap">
+              <div class="dash-canvas-wrap dash-scope-canvas-host">
+                <canvas id="dash-scope-canvas" class="dash-canvas"></canvas>
+              </div>
+              <div class="dash-scope-readout" id="dash-scope-readout"></div>
+            </div>
+          </article>
+
+          <!-- 上右：多规约仿真服务状态矩阵墙 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>多规约仿真服务矩阵</h2>
+              <span class="dash-card-meta" id="dash-svc-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-svc-grid" id="dash-svc-grid"></div>
+          </article>
+        </div>
+
+        <div class="dash-s-bottom">
+          <!-- 下左：各规约通道测点与交互柱状图 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>规约通道点数与交互</h2>
+              <div class="dash-legend" id="dash-bar-legend"></div>
+            </div>
+            <div class="dash-card-body dash-canvas-wrap">
+              <canvas id="dash-bar-canvas" class="dash-canvas"></canvas>
+              <div id="dash-bar-tip" class="dash-tooltip" hidden></div>
+            </div>
+          </article>
+
+          <!-- 下中：遥信 YX LED 指示灯矩阵 + 四遥分布切换 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>遥信 LED 状态矩阵</h2>
+              <div class="dash-seg" id="dash-hbar-tabs" role="tablist">
+                <button type="button" class="is-active" data-hbar-tab="led" role="tab" aria-selected="true">YX 灯阵</button>
+                <button type="button" data-hbar-tab="primary" role="tab" aria-selected="false">四遥棒图</button>
+                <button type="button" data-hbar-tab="live" role="tab" aria-selected="false">实时 YC</button>
+              </div>
+            </div>
+            <div class="dash-card-body dash-hbar-wrap" id="dash-hbar-host"></div>
+          </article>
+
+          <!-- 下右：客户端接入雷达扫描 + 实时会话流 -->
+          <article class="dash-card">
+            <div class="dash-card-head">
+              <h2>客户端接入雷达与交互</h2>
+              <span class="dash-card-meta" id="dash-feed-meta">—</span>
+            </div>
+            <div class="dash-card-body dash-radar-panel">
+              <div class="dash-radar-host" id="dash-radar-host"></div>
+              <div class="dash-feed-list" id="dash-feed-list"></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
