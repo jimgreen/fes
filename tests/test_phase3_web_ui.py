@@ -135,6 +135,7 @@ class Phase3WebRegressionTests(unittest.TestCase):
     def test_ui_theme_and_i18n_assets_served_with_etag_and_no_cdn(self):
         theme_css = (ROOT / "core" / "web_static" / "ui-theme.css").read_text(encoding="utf-8")
         i18n_js = (ROOT / "core" / "web_static" / "ui-i18n.js").read_text(encoding="utf-8")
+        i18n_dict_js = (ROOT / "core" / "web_static" / "ui-i18n-dict.js").read_text(encoding="utf-8")
         for theme_id in (
             "minimalist-light",
             "arctic-frost",
@@ -159,7 +160,7 @@ class Phase3WebRegressionTests(unittest.TestCase):
         self.assertIn("translateElementAttrs", i18n_js)
         self.assertIn("translateText", i18n_js)
         for sample_phrase in ("一键启动全部", "运行参数与日志保留", "搜索 RTU、名称或规约", "进程已退出，未收到正常退出状态"):
-            self.assertIn(sample_phrase, i18n_js)
+            self.assertIn(sample_phrase, i18n_js + i18n_dict_js)
         self.assertIn("tabular-nums", theme_css)
         self.assertNotIn("https://", theme_css)
         self.assertIn('"zh-CN"', i18n_js)

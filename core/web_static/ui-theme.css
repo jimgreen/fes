@@ -2862,6 +2862,416 @@ td.col-num {
   color: #F5EFE4 !important;
 }
 
+/* ==================== 统一顶栏基线 + 全局命令面板 + 异常徽标 + 数值跳变微光 ==================== */
+
+.topbar,
+.workbench-topbar {
+  height: 46px !important;
+  min-height: 46px !important;
+  padding: 0 14px !important;
+  gap: 10px !important;
+}
+.shell {
+  height: calc(100dvh - 46px) !important;
+}
+.workbench-shell {
+  min-height: calc(100dvh - 46px) !important;
+}
+.topbar .brand,
+.workbench-brand {
+  gap: 8px !important;
+}
+.topbar .brand-icon,
+.workbench-brand .brand-icon {
+  width: 26px !important;
+  height: 26px !important;
+  font-size: 15px !important;
+  border-radius: 6px !important;
+}
+.topbar .brand strong,
+.workbench-brand strong {
+  font-size: 14px !important;
+}
+.topbar .brand strong span,
+.workbench-brand strong span {
+  font-size: 12px !important;
+  margin-left: 8px !important;
+  padding-left: 8px !important;
+}
+.header-tools {
+  gap: 6px !important;
+  flex-shrink: 0;
+}
+#database-entry {
+  max-width: clamp(130px, 16vw, 260px) !important;
+  gap: 6px !important;
+  margin-left: 8px !important;
+}
+.topbar .brand,
+.workbench-brand {
+  min-width: 0;
+  flex-shrink: 1;
+}
+@media (max-width: 1440px) {
+  .topbar .brand strong span,
+  .workbench-brand strong span {
+    display: none;
+  }
+  .ui-cmdk-btn kbd {
+    display: none;
+  }
+  #last-updated {
+    display: none;
+  }
+  .topbar .header-tools > a[href="/api-docs"],
+  .workbench-topbar .header-tools > a[href="/api-docs"] {
+    display: none;
+  }
+}
+
+/* 顶栏 Ctrl+K 速查按钮 */
+.ui-cmdk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px !important;
+  font-size: 12px !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-subtle) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer;
+}
+.ui-cmdk-btn:hover {
+  border-color: var(--accent) !important;
+  color: var(--text-primary) !important;
+}
+.ui-cmdk-btn kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+/* 顶栏异常聚合徽标与浮层 */
+.ui-alert-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.ui-alert-chip {
+  height: 26px;
+  padding: 0 9px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  border-radius: 999px !important;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-subtle) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ui-alert-chip.is-ok {
+  color: var(--ok) !important;
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--border-color)) !important;
+}
+.ui-alert-chip.is-warn {
+  color: var(--warn) !important;
+  background: color-mix(in srgb, var(--warn) 12%, var(--bg-surface)) !important;
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--border-color)) !important;
+}
+.ui-alert-chip.is-err {
+  color: var(--danger) !important;
+  background: color-mix(in srgb, var(--danger) 14%, var(--bg-surface)) !important;
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border-color)) !important;
+}
+.ui-alert-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: min(420px, 88vw);
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+.ui-alert-pop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+  font-size: 12px;
+}
+.ui-alert-counts {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ui-alert-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.ui-alert-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  text-align: left;
+  padding: 8px 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  cursor: pointer;
+}
+.ui-alert-item:hover {
+  background: var(--accent-soft) !important;
+}
+.ui-alert-cat {
+  grid-row: span 2;
+  align-self: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+}
+.ui-alert-item.is-err .ui-alert-cat {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
+.ui-alert-title {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-alert-detail {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-alert-empty {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* Ctrl+K 全局命令面板 */
+.ui-cmdk-dialog {
+  width: min(580px, 92vw);
+  max-height: 70vh;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+.ui-cmdk-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+}
+.ui-cmdk-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-subtle);
+}
+#ui-cmdk-input {
+  flex: 1;
+  border: 0 !important;
+  outline: none !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  font-size: 14px !important;
+  padding: 4px !important;
+}
+#ui-cmdk-close {
+  font-size: 11px !important;
+  padding: 2px 7px !important;
+  border-radius: 5px !important;
+}
+.ui-cmdk-list {
+  max-height: 54vh;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ui-cmdk-item {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  cursor: pointer;
+}
+.ui-cmdk-item.is-active,
+.ui-cmdk-item:hover {
+  background: var(--accent-soft) !important;
+}
+.ui-cmdk-group {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  color: var(--accent);
+}
+.ui-cmdk-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-cmdk-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+.ui-cmdk-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* 全站数值跳变瞬态微光反馈（Flash-on-Change） */
+@keyframes scadaFlashUp {
+  0% { background-color: color-mix(in srgb, var(--ok) 28%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes scadaFlashDown {
+  0% { background-color: color-mix(in srgb, var(--accent) 26%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes scadaFlashChange {
+  0% { background-color: color-mix(in srgb, var(--warn) 26%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes scadaFlashWarn {
+  0% { background-color: color-mix(in srgb, var(--danger) 32%, transparent); }
+  100% { background-color: transparent; }
+}
+.scada-flash-up { animation: scadaFlashUp 0.85s ease-out; }
+.scada-flash-down { animation: scadaFlashDown 0.85s ease-out; }
+.scada-flash-change { animation: scadaFlashChange 0.85s ease-out; }
+.scada-flash-warn { animation: scadaFlashWarn 0.95s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .scada-flash-up, .scada-flash-down, .scada-flash-change, .scada-flash-warn { animation: none !important; }
+}
+
+/* 通用语义化品质/陈旧/微折线/复制样式 */
+.scada-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.scada-stale {
+  color: var(--warn) !important;
+  font-weight: 600;
+}
+.scada-stale-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+.scada-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.scada-badge-ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.scada-badge-warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.scada-badge-err { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.scada-badge-muted { background: var(--bg-subtle); color: var(--text-muted); }
+
+.scada-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  padding: 0 4px !important;
+  height: 18px !important;
+  font-size: 10px !important;
+  border-radius: 4px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--text-muted) !important;
+  opacity: 0.55;
+  cursor: pointer;
+}
+tr:hover .scada-copy-btn,
+.scada-copy-btn:focus-visible {
+  opacity: 1;
+  border-color: var(--border-color) !important;
+  background: var(--bg-subtle) !important;
+  color: var(--accent) !important;
+}
+.scada-sparkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.scada-sparkline svg {
+  width: 84px;
+  height: 20px;
+  display: block;
+}
+.scada-sparkline polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 @media (max-width: 960px) {
   .workbench-topbar,
   .topbar {
@@ -2869,5 +3279,8 @@ td.col-num {
   }
   .ui-theme-select {
     max-width: 120px;
+  }
+  .ui-cmdk-btn kbd {
+    display: none;
   }
 }

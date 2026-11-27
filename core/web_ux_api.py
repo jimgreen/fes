@@ -614,6 +614,331 @@ def run_wal_checkpoint(store, mode: str = "PASSIVE") -> dict:
     }
 
 
+def _existing_tables(con: sqlite3.Connection) -> set[str]:
+    return {str(r[0]) for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+
+
+def read_alerts_summary(store, component: str) -> dict:
+    """统一聚合当前数据库的线程错误、进程异常、对账偏差与失败指令告警。"""
+    counts = {
+        "thread_errors": 0,
+        "process_errors": 0,
+        "trace_diffs": 0,
+        "failed_commands": 0,
+    }
+    items: list[dict] = []
+    try:
+        with store.connection() as con:
+            tables = _existing_tables(con)
+            if "fes_rtu_define" in tables:
+                rows = con.execute(
+                    "SELECT rtu_id, name, channel_id, channel_type, process_status, process_error "
+                    "FROM fes_rtu_define WHERE process_status = 5 OR (process_error IS NOT NULL AND TRIM(process_error) != '') "
+                    "ORDER BY rtu_id ASC"
+                ).fetchall()
+                counts["thread_errors"] = len(rows)
+                for r in rows[:6]:
+                    rid = r["rtu_id"]
+                    items.append({
+                        "severity": "error",
+                        "category": "通信线程",
+                        "title": f"RTU {rid} ({r['name'] or '未命名'}) 通信异常",
+                        "detail": str(r["process_error"] or "线程处于错误状态")[:120],
+                        "href": "/#scdfe" if component == "c" else f"/communication?rtu_id={rid}",
+                        "rtu_id": rid,
+                        "channel_id": r["channel_id"],
+                    })
+
+            if "fes_process_define" in tables:
+                rows = con.execute(
+                    "SELECT process_key, target_rtu, process_status, process_error "
+                    "FROM fes_process_define WHERE process_status = 5 ORDER BY process_key ASC"
+                ).fetchall()
+                counts["process_errors"] = len(rows)
+                for r in rows[:4]:
+                    items.append({
+                        "severity": "error",
+                        "category": "核心进程",
+                        "title": f"进程 {r['process_key']} 异常退出",
+                        "detail": str(r["process_error"] or "状态=5")[:120],
+                        "href": "/#processes" if component == "c" else "/communication",
+                        "rtu_id": r["target_rtu"] or None,
+                    })
+
+            if "fes_scdfe_t_point_define" in tables and "fes_yc_define" in tables:
+                diff_rows = []
+                for kind, tbl in (("yc", "fes_yc_define"), ("yx", "fes_yx_define")):
+                    if tbl not in tables:
+                        continue
+                    qrows = con.execute(
+                        f"SELECT tp.source_rtu_id, tp.source_pnt_no, tp.channel_id, tp.pnt_no AS fwd_pnt_no, "
+                        f"s.name AS pnt_name, s.value AS src_value, tp.last_value AS fwd_value "
+                        f"FROM fes_scdfe_t_point_define tp "
+                        f"JOIN {tbl} s ON s.rtu_id = tp.source_rtu_id AND s.pnt_no = tp.source_pnt_no "
+                        f"WHERE LOWER(tp.kind) = ? AND tp.enabled != 0 "
+                        f"AND s.value IS NOT NULL AND tp.last_value IS NOT NULL "
+                        f"AND ABS(CAST(s.value AS REAL) - CAST(tp.last_value AS REAL)) > 1e-4 "
+                        f"LIMIT 20",
+                        (kind,),
+                    ).fetchall()
+                    for qr in qrows:
+                        diff_rows.append((kind, qr))
+                counts["trace_diffs"] = len(diff_rows)
+                for kind, qr in diff_rows[:4]:
+                    items.append({
+                        "severity": "warn",
+                        "category": "全链路偏差",
+                        "title": f"{kind.upper()} RTU {qr['source_rtu_id']}#{qr['source_pnt_no']} 采集与转发值不一致",
+                        "detail": f"采集={qr['src_value']} / 转发={qr['fwd_value']} (转发通道 {qr['channel_id']})",
+                        "href": f"/point-trace?kind={kind}&rtu_id={qr['source_rtu_id']}&anomaly_only=1",
+                        "rtu_id": qr["source_rtu_id"],
+                        "channel_id": qr["channel_id"],
+                    })
+
+            if "fes_command_trace" in tables:
+                import time
+                cutoff_ms = int((time.time() - 3600) * 1000)
+                frows = con.execute(
+                    "SELECT command_id, rtu_id, kind, pnt_no, stage, detail "
+                    "FROM fes_command_trace WHERE stage = 'failed' AND created_at >= ? "
+                    "ORDER BY created_at DESC LIMIT 10",
+                    (cutoff_ms,),
+                ).fetchall()
+                counts["failed_commands"] = len(frows)
+                for fr in frows[:4]:
+                    items.append({
+                        "severity": "error",
+                        "category": "指令失败",
+                        "title": f"指令 #{fr['command_id']} RTU {fr['rtu_id']} {str(fr['kind'] or '').upper()} {fr['pnt_no']} 失败",
+                        "detail": str(fr["detail"] or "近 1 小时指令执行失败")[:120],
+                        "href": f"/command-traces?rtu_id={fr['rtu_id']}",
+                        "rtu_id": fr["rtu_id"],
+                    })
+    except sqlite3.Error:
+        pass
+
+    total = sum(counts.values())
+    return {
+        "component": component,
+        "total": total,
+        "counts": counts,
+        "items": items[:16],
+    }
+
+
+def read_quick_search(store, component: str, query: dict) -> dict:
+    """为全局 Ctrl+K 命令面板提供 RTU、转发通道与四遥测点快速模糊检索。"""
+    q = str(query.get("q") or "").strip()
+    like = f"%{q}%"
+    rtus: list[dict] = []
+    trans_channels: list[dict] = []
+    points: list[dict] = []
+    try:
+        with store.connection() as con:
+            tables = _existing_tables(con)
+            if "fes_rtu_define" in tables:
+                if q:
+                    rows = con.execute(
+                        "SELECT rtu_id, name, channel_id, channel_type, process_status FROM fes_rtu_define "
+                        "WHERE CAST(rtu_id AS TEXT) LIKE ? OR COALESCE(name,'') LIKE ? OR COALESCE(channel_type,'') LIKE ? "
+                        "ORDER BY rtu_id ASC LIMIT 12",
+                        (like, like, like),
+                    ).fetchall()
+                else:
+                    rows = con.execute(
+                        "SELECT rtu_id, name, channel_id, channel_type, process_status FROM fes_rtu_define "
+                        "ORDER BY rtu_id ASC LIMIT 12"
+                    ).fetchall()
+                rtus = [
+                    {
+                        "rtu_id": r["rtu_id"],
+                        "name": r["name"] or "",
+                        "channel_id": r["channel_id"],
+                        "channel_type": r["channel_type"] or "",
+                        "process_status": r["process_status"],
+                    }
+                    for r in rows
+                ]
+            if "fes_scdfe_t_define" in tables:
+                try:
+                    if q:
+                        rows = con.execute(
+                            "SELECT channel_id, name, protocol, bind_port, process_enable FROM fes_scdfe_t_define "
+                            "WHERE CAST(channel_id AS TEXT) LIKE ? OR COALESCE(name,'') LIKE ? OR COALESCE(protocol,'') LIKE ? "
+                            "ORDER BY channel_id ASC LIMIT 10",
+                            (like, like, like),
+                        ).fetchall()
+                    else:
+                        rows = con.execute(
+                            "SELECT channel_id, name, protocol, bind_port, process_enable FROM fes_scdfe_t_define "
+                            "ORDER BY channel_id ASC LIMIT 10"
+                        ).fetchall()
+                    trans_channels = [
+                        {
+                            "channel_id": r["channel_id"],
+                            "name": r["name"] or "",
+                            "protocol": r["protocol"] or "",
+                            "bind_port": r["bind_port"],
+                            "enabled": r["process_enable"],
+                        }
+                        for r in rows
+                    ]
+                except sqlite3.Error:
+                    pass
+            if q:
+                for kind, tbl in _KIND_TABLES.items():
+                    if tbl not in tables:
+                        continue
+                    prows = con.execute(
+                        f"SELECT rtu_id, pnt_no, name, value FROM {tbl} "
+                        f"WHERE CAST(pnt_no AS TEXT) LIKE ? OR COALESCE(name,'') LIKE ? "
+                        f"ORDER BY rtu_id ASC, pnt_no ASC LIMIT 4",
+                        (like, like),
+                    ).fetchall()
+                    for pr in prows:
+                        points.append({
+                            "kind": kind,
+                            "rtu_id": pr["rtu_id"],
+                            "pnt_no": pr["pnt_no"],
+                            "name": pr["name"] or "",
+                            "value": pr["value"],
+                        })
+    except sqlite3.Error:
+        pass
+    return {
+        "component": component,
+        "q": q,
+        "rtus": rtus,
+        "trans_channels": trans_channels,
+        "points": points[:12],
+    }
+
+
+def read_chain_overview(store, component: str, query: dict) -> dict:
+    """汇总 S -> C -> T 端到端链路态势（支持按 rtu_id 聚焦或全局统计）。"""
+    rtu_raw = str(query.get("rtu_id") or "").strip()
+    rtu_id = int(rtu_raw) if rtu_raw.isdigit() else None
+    source = {
+        "rtu_count": 0,
+        "running_count": 0,
+        "error_count": 0,
+        "point_total": 0,
+        "focus": None,
+    }
+    forward = {
+        "channel_count": 0,
+        "enabled_channels": 0,
+        "mapped_points": 0,
+        "diff_points": 0,
+    }
+    simulator = {
+        "available": False,
+        "rtu_count": 0,
+        "running_count": 0,
+    }
+    try:
+        with store.connection() as con:
+            tables = _existing_tables(con)
+            if "fes_rtu_define" in tables:
+                where = "WHERE rtu_id = ?" if rtu_id is not None else ""
+                params = (rtu_id,) if rtu_id is not None else ()
+                rrows = con.execute(
+                    f"SELECT rtu_id, name, channel_id, channel_type, process_status, process_enable, process_heartbeat_time "
+                    f"FROM fes_rtu_define {where} ORDER BY rtu_id ASC",
+                    params,
+                ).fetchall()
+                source["rtu_count"] = len(rrows)
+                source["running_count"] = sum(1 for r in rrows if int(r["process_status"] or 0) == 2)
+                source["error_count"] = sum(1 for r in rrows if int(r["process_status"] or 0) == 5)
+                if rtu_id is not None and rrows:
+                    r0 = rrows[0]
+                    source["focus"] = {
+                        "rtu_id": r0["rtu_id"],
+                        "name": r0["name"] or "",
+                        "channel_id": r0["channel_id"],
+                        "channel_type": r0["channel_type"] or "",
+                        "process_status": r0["process_status"],
+                        "process_enable": r0["process_enable"],
+                        "heartbeat_time": r0["process_heartbeat_time"],
+                    }
+            for tbl in _KIND_TABLES.values():
+                if tbl in tables:
+                    if rtu_id is not None:
+                        c_row = con.execute(f"SELECT COUNT(*) FROM {tbl} WHERE rtu_id = ?", (rtu_id,)).fetchone()
+                    else:
+                        c_row = con.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()
+                    source["point_total"] += int(c_row[0]) if c_row else 0
+
+            if "fes_scdfe_t_define" in tables:
+                try:
+                    t_all = con.execute("SELECT COUNT(*), SUM(CASE WHEN COALESCE(process_enable, 0) != 0 THEN 1 ELSE 0 END) FROM fes_scdfe_t_define").fetchone()
+                    forward["channel_count"] = int(t_all[0] or 0)
+                    forward["enabled_channels"] = int(t_all[1] or 0)
+                except sqlite3.Error:
+                    pass
+            if "fes_scdfe_t_point_define" in tables:
+                if rtu_id is not None:
+                    mp = con.execute(
+                        "SELECT COUNT(*), COUNT(DISTINCT channel_id) FROM fes_scdfe_t_point_define WHERE source_rtu_id = ?",
+                        (rtu_id,),
+                    ).fetchone()
+                    forward["mapped_points"] = int(mp[0] or 0)
+                    forward["channel_count"] = int(mp[1] or 0)
+                else:
+                    mp = con.execute("SELECT COUNT(*) FROM fes_scdfe_t_point_define").fetchone()
+                    forward["mapped_points"] = int(mp[0] or 0)
+                for kind, tbl in (("yc", "fes_yc_define"), ("yx", "fes_yx_define")):
+                    if tbl not in tables:
+                        continue
+                    w_rtu = "AND tp.source_rtu_id = ?" if rtu_id is not None else ""
+                    p_rtu = (kind, rtu_id) if rtu_id is not None else (kind,)
+                    dc = con.execute(
+                        f"SELECT COUNT(*) FROM fes_scdfe_t_point_define tp "
+                        f"JOIN {tbl} s ON s.rtu_id = tp.source_rtu_id AND s.pnt_no = tp.source_pnt_no "
+                        f"WHERE LOWER(tp.kind) = ? AND tp.enabled != 0 {w_rtu} "
+                        f"AND s.value IS NOT NULL AND tp.last_value IS NOT NULL "
+                        f"AND ABS(CAST(s.value AS REAL) - CAST(tp.last_value AS REAL)) > 1e-4",
+                        p_rtu,
+                    ).fetchone()
+                    forward["diff_points"] += int(dc[0] or 0)
+    except sqlite3.Error:
+        pass
+
+    # 只读探测同目录仿真库 scdfe_s.db（不加锁、不干扰主库）
+    try:
+        sim_db = Path(store.db_path).parent / "scdfe_s.db"
+        if sim_db.is_file():
+            scon = sqlite3.connect(f"file:{sim_db}?mode=ro", uri=True, timeout=0.5)
+            try:
+                stables = _existing_tables(scon)
+                if "fes_rtu_define" in stables:
+                    simulator["available"] = True
+                    if rtu_id is not None:
+                        sr = scon.execute(
+                            "SELECT COUNT(*), SUM(CASE WHEN process_status = 2 THEN 1 ELSE 0 END) "
+                            "FROM fes_rtu_define WHERE rtu_id = ?",
+                            (rtu_id,),
+                        ).fetchone()
+                    else:
+                        sr = scon.execute(
+                            "SELECT COUNT(*), SUM(CASE WHEN process_status = 2 THEN 1 ELSE 0 END) FROM fes_rtu_define"
+                        ).fetchone()
+                    simulator["rtu_count"] = int(sr[0] or 0)
+                    simulator["running_count"] = int(sr[1] or 0)
+            finally:
+                scon.close()
+    except Exception:
+        pass
+
+    return {
+        "component": component,
+        "rtu_id": rtu_id,
+        "simulator": simulator,
+        "source": source,
+        "forward": forward,
+    }
+
+
 def workbench_links_payload(handler, component: str) -> dict:
     """返回 C/S/T 三端服务快捷跳转配置及当前安全权限态。"""
     host = "127.0.0.1"
@@ -647,6 +972,21 @@ def handle_ux_api(handler, parts, query, method, store, component):
         if method != "GET":
             raise ApiError(405, "只支持 GET")
         return handler._json(200, workbench_links_payload(handler, component))
+
+    if parts == ["api", "alerts-summary"]:
+        if method != "GET":
+            raise ApiError(405, "异常汇总接口只支持 GET")
+        return handler._json(200, read_alerts_summary(store, component))
+
+    if parts == ["api", "quick-search"]:
+        if method != "GET":
+            raise ApiError(405, "快速检索接口只支持 GET")
+        return handler._json(200, read_quick_search(store, component, query))
+
+    if parts == ["api", "chain-overview"]:
+        if method != "GET":
+            raise ApiError(405, "端到端链路概览接口只支持 GET")
+        return handler._json(200, read_chain_overview(store, component, query))
 
     if parts == ["api", "auth", "session"]:
         if method == "GET":

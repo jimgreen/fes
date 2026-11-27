@@ -171,6 +171,19 @@ small,
   gap: 5px;
   color: var(--muted);
 }
+#auto-refresh-interval {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+.scdfe-status .metric.is-clickable {
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.scdfe-status .metric.is-clickable:hover {
+  border-color: var(--teal);
+  transform: translateY(-1px);
+}
 .shell {
   --c-sidebar-width: 192px;
   display: grid;

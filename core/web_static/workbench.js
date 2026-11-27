@@ -361,14 +361,373 @@
     }
   }
 
+  // ==================== 5. 顶栏异常聚合徽标（⚠ N） ====================
+  let alertPopoverOpen = false;
+  let alertDataCache = null;
+
+  function renderAlertChip(data) {
+    const tools = document.querySelector(".header-tools");
+    if (!tools || !data) return;
+    alertDataCache = data;
+    let wrap = document.getElementById("ui-alert-wrap");
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.id = "ui-alert-wrap";
+      wrap.className = "ui-alert-wrap";
+      wrap.innerHTML =
+        '<button type="button" id="ui-alert-chip" class="ui-alert-chip" aria-haspopup="dialog" aria-expanded="false"></button>' +
+        '<div id="ui-alert-popover" class="ui-alert-popover" hidden></div>';
+      const siblingAnchor = document.getElementById("ui-focus-chip") || tools.firstChild;
+      if (siblingAnchor) tools.insertBefore(wrap, siblingAnchor);
+      else tools.prepend(wrap);
+
+      const chipBtn = wrap.querySelector("#ui-alert-chip");
+      const popover = wrap.querySelector("#ui-alert-popover");
+      chipBtn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        alertPopoverOpen = !alertPopoverOpen;
+        popover.hidden = !alertPopoverOpen;
+        chipBtn.setAttribute("aria-expanded", String(alertPopoverOpen));
+        if (alertPopoverOpen) renderAlertPopover(alertDataCache);
+      });
+      document.addEventListener("click", (ev) => {
+        if (alertPopoverOpen && !wrap.contains(ev.target)) {
+          alertPopoverOpen = false;
+          popover.hidden = true;
+          chipBtn.setAttribute("aria-expanded", "false");
+        }
+      });
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape" && alertPopoverOpen) {
+          alertPopoverOpen = false;
+          popover.hidden = true;
+          chipBtn.setAttribute("aria-expanded", "false");
+        }
+      });
+    }
+    const chipBtn = wrap.querySelector("#ui-alert-chip");
+    const total = Number(data.total || 0);
+    const hasErr = (data.counts?.thread_errors || 0) + (data.counts?.process_errors || 0) + (data.counts?.failed_commands || 0) > 0;
+    chipBtn.className = "ui-alert-chip " + (total === 0 ? "is-ok" : (hasErr ? "is-err" : "is-warn"));
+    chipBtn.textContent = total === 0 ? "✓ 正常" : `⚠ 异常 ${total}`;
+    chipBtn.title = total === 0
+      ? "运行态无异常告警"
+      : `线程异常 ${data.counts?.thread_errors || 0} · 进程异常 ${data.counts?.process_errors || 0} · 对账偏差 ${data.counts?.trace_diffs || 0} · 指令失败 ${data.counts?.failed_commands || 0}`;
+    if (alertPopoverOpen) renderAlertPopover(data);
+  }
+
+  function escHtml(v) {
+    return String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function renderAlertPopover(data) {
+    const popover = document.getElementById("ui-alert-popover");
+    if (!popover || !data) return;
+    const c = data.counts || {};
+    const items = Array.isArray(data.items) ? data.items : [];
+    const summary =
+      `<div class="ui-alert-pop-head">` +
+      `<strong>异常汇总 (${Number(data.total || 0)})</strong>` +
+      `<span class="ui-alert-counts">线程 ${c.thread_errors || 0} · 进程 ${c.process_errors || 0} · 偏差 ${c.trace_diffs || 0} · 指令 ${c.failed_commands || 0}</span>` +
+      `</div>`;
+    if (!items.length) {
+      popover.innerHTML = summary + '<div class="ui-alert-empty">当前无通信、进程或对账异常</div>';
+      return;
+    }
+    const listHtml = items.map((it, idx) =>
+      `<button type="button" class="ui-alert-item is-${it.severity === "error" ? "err" : "warn"}" data-alert-idx="${idx}">` +
+      `<span class="ui-alert-cat">${escHtml(it.category)}</span>` +
+      `<span class="ui-alert-title">${escHtml(it.title)}</span>` +
+      `<span class="ui-alert-detail">${escHtml(it.detail || "")}</span>` +
+      `</button>`
+    ).join("");
+    popover.innerHTML = summary + `<div class="ui-alert-list">${listHtml}</div>`;
+    popover.querySelectorAll("[data-alert-idx]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const it = items[Number(btn.dataset.alertIdx)];
+        if (!it) return;
+        const patch = {};
+        if (it.rtu_id != null) patch.rtu_id = String(it.rtu_id);
+        if (it.channel_id != null) patch.channel_id = String(it.channel_id);
+        if (Object.keys(patch).length) writeFocus(patch);
+        alertPopoverOpen = false;
+        popover.hidden = true;
+        if (it.href) location.href = it.href;
+      });
+    });
+  }
+
+  async function refreshAlerts() {
+    try {
+      const resp = await fetch("/api/alerts-summary", { cache: "no-cache" });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      renderAlertChip(data);
+    } catch (_) {
+      // 忽略异常
+    }
+  }
+
+  // ==================== 6. 全局 Ctrl+K 命令面板 ====================
+  let cmdkEntries = [];
+  let cmdkIndex = 0;
+  let cmdkFetchTimer = null;
+  let cmdkAbort = null;
+
+  function collectPageCommands() {
+    const results = [];
+    const seen = new Set();
+    document.querySelectorAll(".workbench-sidebar a.nav, .sidebar a.nav, .sidebar button.nav").forEach(el => {
+      const label = (el.querySelector("b")?.textContent || el.textContent || "").trim();
+      if (!label || seen.has(label)) return;
+      seen.add(label);
+      const href = el.tagName === "A" ? el.getAttribute("href") : "";
+      const res = el.dataset?.resource || el.dataset?.tabResource || "";
+      results.push({
+        group: "页面",
+        title: label,
+        sub: href || (res ? `#${res}` : "当前工作台"),
+        keywords: `${label} ${href} ${res}`.toLowerCase(),
+        run: () => {
+          if (href) location.href = href;
+          else el.click();
+        },
+      });
+    });
+    const i18n = window.scadaI18n;
+    if (i18n && Array.isArray(i18n.themes)) {
+      i18n.themes.forEach(themeId => {
+        const name = i18n.t(`ui.theme.${themeId}`, themeId);
+        results.push({
+          group: "主题",
+          title: `切换风格 · ${name}`,
+          sub: themeId,
+          keywords: `theme 主题 风格 ${name} ${themeId}`.toLowerCase(),
+          run: () => i18n.setTheme(themeId),
+        });
+      });
+    }
+    results.push(
+      {
+        group: "动作",
+        title: "刷新当前页面数据",
+        sub: "Alt+R",
+        keywords: "refresh 刷新 reload".toLowerCase(),
+        run: () => {
+          const btn = document.querySelector("#refresh, #scdfe-refresh, #process-refresh, #pt-refresh, #points-refresh, #test-refresh, #lb-refresh");
+          if (btn && !btn.disabled) btn.click();
+          else location.reload();
+        },
+      },
+      {
+        group: "动作",
+        title: "清除跨页聚焦上下文",
+        sub: "解除当前 RTU / 通道锁定",
+        keywords: "clear focus 清除 聚焦 上下文".toLowerCase(),
+        run: () => clearFocus(),
+      },
+      {
+        group: "动作",
+        title: "执行 WAL 日志整理 (PASSIVE)",
+        sub: "POST /api/diagnostics/wal-checkpoint",
+        keywords: "wal checkpoint 数据库 整理".toLowerCase(),
+        run: async () => {
+          await fetch("/api/diagnostics/wal-checkpoint", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode: "PASSIVE" }),
+          }).catch(() => {});
+        },
+      },
+    );
+    return results;
+  }
+
+  function ensureCmdkDialog() {
+    let dlg = document.getElementById("ui-cmdk-dialog");
+    if (dlg) return dlg;
+    dlg = document.createElement("dialog");
+    dlg.id = "ui-cmdk-dialog";
+    dlg.className = "ui-cmdk-dialog";
+    dlg.innerHTML =
+      '<div class="ui-cmdk-head">' +
+      '<input id="ui-cmdk-input" type="search" autocomplete="off" placeholder="搜索 RTU、通道、四遥测点、页面或 14 套主题… (↑↓ 选择 · Enter 直达)" aria-label="全局命令搜索">' +
+      '<button type="button" id="ui-cmdk-close" class="icon-button" aria-label="关闭">Esc</button>' +
+      '</div>' +
+      '<div id="ui-cmdk-list" class="ui-cmdk-list" role="listbox"></div>';
+    document.body.appendChild(dlg);
+
+    const input = dlg.querySelector("#ui-cmdk-input");
+    const list = dlg.querySelector("#ui-cmdk-list");
+    dlg.querySelector("#ui-cmdk-close").onclick = () => dlg.close();
+    dlg.addEventListener("click", (ev) => {
+      if (ev.target === dlg) dlg.close();
+    });
+    input.addEventListener("input", () => {
+      clearTimeout(cmdkFetchTimer);
+      renderCmdkLocalAndRemote(input.value.trim());
+    });
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        if (cmdkEntries.length) {
+          cmdkIndex = (cmdkIndex + 1) % cmdkEntries.length;
+          paintCmdkList();
+        }
+      } else if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        if (cmdkEntries.length) {
+          cmdkIndex = (cmdkIndex - 1 + cmdkEntries.length) % cmdkEntries.length;
+          paintCmdkList();
+        }
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        const entry = cmdkEntries[cmdkIndex];
+        if (entry) {
+          dlg.close();
+          entry.run();
+        }
+      }
+    });
+    list.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-cmdk-idx]");
+      if (!btn) return;
+      const entry = cmdkEntries[Number(btn.dataset.cmdkIdx)];
+      if (entry) {
+        dlg.close();
+        entry.run();
+      }
+    });
+    return dlg;
+  }
+
+  function paintCmdkList() {
+    const list = document.getElementById("ui-cmdk-list");
+    if (!list) return;
+    if (!cmdkEntries.length) {
+      list.innerHTML = '<div class="ui-cmdk-empty">无匹配项</div>';
+      return;
+    }
+    list.innerHTML = cmdkEntries.map((item, idx) =>
+      `<button type="button" role="option" class="ui-cmdk-item${idx === cmdkIndex ? " is-active" : ""}" data-cmdk-idx="${idx}" aria-selected="${idx === cmdkIndex}">` +
+      `<span class="ui-cmdk-group">${escHtml(item.group)}</span>` +
+      `<span class="ui-cmdk-title">${escHtml(item.title)}</span>` +
+      `<span class="ui-cmdk-sub">${escHtml(item.sub || "")}</span>` +
+      `</button>`
+    ).join("");
+    const active = list.querySelector(".ui-cmdk-item.is-active");
+    active?.scrollIntoView?.({ block: "nearest" });
+  }
+
+  function buildRemoteEntries(data) {
+    const out = [];
+    const comp = data?.component || "c";
+    (data?.rtus || []).forEach(r => {
+      out.push({
+        group: "RTU",
+        title: `RTU ${r.rtu_id}${r.name ? " · " + r.name : ""}`,
+        sub: `${r.channel_type || "—"} · 通道 ${r.channel_id ?? "—"}`,
+        run: () => {
+          writeFocus({ rtu_id: String(r.rtu_id), channel_id: r.channel_id != null ? String(r.channel_id) : "" });
+          if (comp === "c") location.href = `/point-trace?rtu_id=${encodeURIComponent(r.rtu_id)}`;
+          else if (comp === "s") location.href = `/test?rtu_id=${encodeURIComponent(r.rtu_id)}`;
+          else location.href = `/point-trace?rtu_id=${encodeURIComponent(r.rtu_id)}`;
+        },
+      });
+    });
+    (data?.trans_channels || []).forEach(ch => {
+      out.push({
+        group: "转发通道",
+        title: `通道 ${ch.channel_id}${ch.name ? " · " + ch.name : ""}`,
+        sub: `${ch.protocol || "—"}${ch.bind_port ? " :" + ch.bind_port : ""}`,
+        run: () => {
+          writeFocus({ channel_id: String(ch.channel_id) });
+          location.href = comp === "t" ? `/points?channel_id=${encodeURIComponent(ch.channel_id)}` : `/point-trace`;
+        },
+      });
+    });
+    (data?.points || []).forEach(p => {
+      out.push({
+        group: p.kind.toUpperCase(),
+        title: `RTU ${p.rtu_id} #${p.pnt_no}${p.name ? " · " + p.name : ""}`,
+        sub: p.value != null ? `当前值 ${p.value}` : "定位到对账",
+        run: () => {
+          writeFocus({ rtu_id: String(p.rtu_id) });
+          location.href = `/point-trace?kind=${encodeURIComponent(p.kind)}&rtu_id=${encodeURIComponent(p.rtu_id)}&q=${encodeURIComponent(p.pnt_no)}`;
+        },
+      });
+    });
+    return out;
+  }
+
+  function renderCmdkLocalAndRemote(q) {
+    const low = q.toLowerCase();
+    const locals = collectPageCommands().filter(item => !low || item.keywords.includes(low) || item.title.toLowerCase().includes(low));
+    cmdkEntries = locals.slice(0, 14);
+    cmdkIndex = 0;
+    paintCmdkList();
+
+    cmdkFetchTimer = setTimeout(async () => {
+      if (cmdkAbort) cmdkAbort.abort();
+      cmdkAbort = typeof AbortController === "function" ? new AbortController() : null;
+      try {
+        const resp = await fetch("/api/quick-search?q=" + encodeURIComponent(q), {
+          cache: "no-cache",
+          signal: cmdkAbort?.signal,
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const remotes = buildRemoteEntries(data);
+        cmdkEntries = [...remotes, ...locals].slice(0, 24);
+        cmdkIndex = 0;
+        paintCmdkList();
+      } catch (_) {
+        // 忽略中止/网络错
+      }
+    }, q ? 120 : 10);
+  }
+
+  function openCmdk() {
+    const dlg = ensureCmdkDialog();
+    const input = dlg.querySelector("#ui-cmdk-input");
+    if (!dlg.open) dlg.showModal();
+    input.value = "";
+    renderCmdkLocalAndRemote("");
+    input.focus();
+  }
+
+  function mountCmdkTrigger() {
+    const tools = document.querySelector(".header-tools");
+    if (!tools || document.getElementById("ui-cmdk-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "ui-cmdk-btn";
+    btn.className = "ui-cmdk-btn";
+    btn.title = "全局命令与快速跳转 (Ctrl+K)";
+    btn.innerHTML = '<span>速查</span><kbd>Ctrl+K</kbd>';
+    btn.onclick = openCmdk;
+    tools.prepend(btn);
+  }
+
+  document.addEventListener("keydown", (ev) => {
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && (ev.key === "k" || ev.key === "K")) {
+      ev.preventDefault();
+      openCmdk();
+    }
+  });
+
   window.scadaFocusContext = { read: readFocus, write: writeFocus, set: writeFocus, clear: clearFocus };
   window.scadaTrackCommand = scadaTrackCommand;
+  window.scadaOpenCmdk = openCmdk;
 
   function init() {
     syncFocusFromUrl();
     renderFocusChip();
     bindFocusWatchers();
     initWorkbenchLinks();
+    mountCmdkTrigger();
+    refreshAlerts();
+    setInterval(() => { if (!document.hidden) refreshAlerts(); }, 12000);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, { once: true });

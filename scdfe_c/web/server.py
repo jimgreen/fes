@@ -492,14 +492,58 @@ class ScadaHandler(BaseScadaHandlerMixin, RequestBodyMixin, BaseHTTPRequestHandl
                                              self._body(), self._if_match())
             return self._json(202, {'item': item, 'command_status': 'pending'})
         if parts[:2] == ["api", "processes"]:
-            if query:
-                raise ApiError(400, "进程接口不接受查询参数")
             if len(parts) == 2 and method == "GET":
-                return self._json(200, self.server.process_controller.snapshot())
+                unknown = set(query) - {"fresh"}
+                if unknown:
+                    raise ApiError(400, "未知进程查询参数", details=sorted(unknown))
+                fresh = str(query.get("fresh") or "").strip().lower() in ("1", "true", "yes")
+                return self._json(200, self.server.process_controller.snapshot(fresh=fresh))
+            if query:
+                raise ApiError(400, "进程控制接口不接受查询参数")
             if parts == ["api", "processes", "control"] and method == "POST":
                 operation = self.server.process_controller.submit(self._body())
                 return self._json(202, {"operation": operation})
             raise ApiError(405, "进程接口支持 GET /api/processes 和 POST /api/processes/control")
+        if len(parts) == 4 and parts[:2] == ["api", "points"] and parts[3] == "batch":
+            if method != "POST":
+                raise ApiError(405, "四遥批量接口只支持 POST")
+            if query:
+                raise ApiError(400, "四遥批量接口不接受查询参数")
+            body = self._body()
+            result = self.store.batch_points(
+                parts[2],
+                body.get("action"),
+                body.get("items"),
+                body.get("values"),
+            )
+            return self._json(200, result)
+        if len(parts) == 4 and parts[:2] == ["api", "points"] and parts[3] == "csv":
+            kind = parts[2].lower()
+            if method == "GET":
+                rtu_raw = str(query.get("rtu_id") or "").strip()
+                rtu_val = int(rtu_raw) if rtu_raw else None
+                raw_csv = self.store.export_points_csv(kind, rtu_id=rtu_val, search=query.get("q", ""))
+                headers = {
+                    "Content-Disposition": f'attachment; filename="scdfe_c-{kind}.csv"',
+                    "Cache-Control": "no-store",
+                }
+                self._send(200, "text/csv; charset=utf-8", raw_csv, headers)
+                return
+            if method == "POST":
+                if query:
+                    raise ApiError(400, "CSV 导入不接受查询参数")
+                body = self._body()
+                rtu_raw = body.get("rtu_id")
+                rtu_val = int(rtu_raw) if rtu_raw not in (None, "") else None
+                result = self.store.import_points_csv(
+                    kind,
+                    body.get("content") or "",
+                    rtu_id=rtu_val,
+                    dry_run=bool(body.get("dry_run")),
+                    on_conflict=str(body.get("on_conflict") or "skip"),
+                )
+                return self._json(200 if body.get("dry_run") else 201, result)
+            raise ApiError(405, "CSV 接口只支持 GET 和 POST")
         # False means unhandled; a handled route returns _json()'s None after
         # writing its response. Do not fall through and append a second 404.
         if self._scdfe_control(parts, query, method) is not False:

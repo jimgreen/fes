@@ -62,13 +62,33 @@ def runtime_python():
 
 
 class ProcessController:
-    def __init__(self, store, *, timeout=150):
+    def __init__(self, store, *, timeout=150, snapshot_ttl: float = 0.8):
         self.store = store
         self.timeout = timeout
+        self._snapshot_ttl = max(0.0, float(snapshot_ttl))
         self._mutex = threading.RLock()
         self._operation = None
         self._children = {}
         self._thread = None
+        self._snapshot_cache = None
+        self._snapshot_ts = 0.0
+
+    def invalidate_snapshot(self):
+        """主动失效进程快照缓存，确保启停/配置变更立即可见。"""
+        with self._mutex:
+            self._snapshot_cache = None
+            self._snapshot_ts = 0.0
+
+    @staticmethod
+    def _clone_snapshot(payload: dict) -> dict:
+        op = payload.get("operation")
+        if op is not None:
+            op = {**op, "steps": [dict(step) for step in op.get("steps") or []]}
+        return {
+            "items": [dict(item) for item in payload.get("items") or []],
+            "operation": op,
+            "busy": bool(payload.get("busy")),
+        }
 
     def command_config(self):
         """Return the singleton TCP command-server configuration row.
@@ -138,7 +158,15 @@ class ProcessController:
             row = self.store.get_row(PROCESS_TABLE, [key])
         return row
 
-    def snapshot(self):
+    def snapshot(self, *, fresh: bool = False):
+        if not fresh and self._snapshot_ttl > 0:
+            now = time.monotonic()
+            with self._mutex:
+                if (
+                    self._snapshot_cache is not None
+                    and (now - self._snapshot_ts) < self._snapshot_ttl
+                ):
+                    return self._clone_snapshot(self._snapshot_cache)
         control = ensure_control_row(self.store)
         command = self.command_config()
         command_enable = int(command.get("process_enable") or 0)
@@ -214,9 +242,15 @@ class ProcessController:
             operation = dict(self._operation) if self._operation else None
             if operation:
                 operation["steps"] = list(operation["steps"])
-        return {"items": items, "operation": operation,
-                "busy": bool(operation and operation["status"] == "running") or
-                InstanceLock.held(self.store.db_path, "process-control")}
+            result = {
+                "items": items,
+                "operation": operation,
+                "busy": bool(operation and operation["status"] == "running")
+                or InstanceLock.held(self.store.db_path, "process-control"),
+            }
+            self._snapshot_cache = self._clone_snapshot(result)
+            self._snapshot_ts = time.monotonic()
+        return result
 
     def _validate_debug(self, key):
         rtu = self.store.get_row("fes_rtu_define", [int(key.split(":")[1])])
@@ -264,6 +298,8 @@ class ProcessController:
                 self._operation = {"id": uuid.uuid4().hex, "target": target, "action": action,
                                    "status": "running", "stage": "准备执行", "steps": [],
                                    "started_at": now_ms(), "finished_at": 0, "error": ""}
+                self._snapshot_cache = None
+                self._snapshot_ts = 0.0
                 self._operation['trace_id'] = audit.trace_id()
                 audit.emit('任务已受理', job_id=self._operation['id'], target=target, action=action)
                 context = copy_context()
@@ -284,6 +320,8 @@ class ProcessController:
         with self._mutex:
             self._operation["stage"] = message
             self._operation["steps"].append({"time": now_ms(), "message": message})
+            self._snapshot_cache = None
+            self._snapshot_ts = 0.0
             audit.emit('任务步骤', job_id=self._operation['id'], message=message)
 
     def _wait(self, predicate, message):
@@ -486,6 +524,7 @@ class ProcessController:
             except Exception:
                 LOG.exception("Unable to persist process-control failure")
         finally:
+            self.invalidate_snapshot()
             lock.release()
 
     def configure_main(self, values):
@@ -497,4 +536,5 @@ class ProcessController:
             ensure_control_row(self.store)
             return self.store.update_row(CONTROL_TABLE, [1], values)
         finally:
+            self.invalidate_snapshot()
             lock.release()

@@ -2310,3 +2310,326 @@ class ScadaStore:
             'parameter_schema': parameter_schema,
         }
 
+    def batch_points(
+        self,
+        kind: str,
+        action: str,
+        items: list[Any],
+        values: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """单事务批量更新或删除四遥测点，支持逐条乐观锁校验并返回结果明细。"""
+        kind_key = str(kind or "").strip().lower()
+        table = KIND_TABLES.get(kind_key)
+        if not table:
+            raise ApiError(400, "测点类型必须是 yc、yx、yt 或 yk")
+        act = str(action or "").strip().lower()
+        if act not in ("update", "delete"):
+            raise ApiError(400, "批量操作 action 必须是 update 或 delete")
+        if not isinstance(items, list) or not items:
+            raise ApiError(400, "items 必须是非空数组")
+        if len(items) > 5000:
+            raise ApiError(400, "单次批量操作最多支持 5000 条记录")
+
+        canonical, _, primary_keys = self._table_parts(table)
+        parsed: list[tuple[int, int, int | None]] = []
+        for idx, entry in enumerate(items):
+            if isinstance(entry, dict):
+                raw_rtu = entry.get("rtu_id")
+                raw_pnt = entry.get("pnt_no")
+                raw_ver = entry.get("_version")
+            elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                raw_rtu, raw_pnt = entry[0], entry[1]
+                raw_ver = entry[2] if len(entry) >= 3 else None
+            else:
+                raise ApiError(400, f"第 {idx + 1} 项键格式无效")
+            try:
+                rtu_id = int(raw_rtu)
+                pnt_no = int(raw_pnt)
+                version = int(raw_ver) if raw_ver is not None and raw_ver != "" else None
+            except (TypeError, ValueError) as exc:
+                raise ApiError(400, f"第 {idx + 1} 项主键必须是整数") from exc
+            parsed.append((rtu_id, pnt_no, version))
+
+        succeeded = 0
+        failed = 0
+        errors: list[dict[str, Any]] = []
+
+        if act == "update":
+            if not isinstance(values, dict) or not values:
+                raise ApiError(400, "批量更新必须提供至少一个字段")
+            normalised = self._normalise(table, values, partial=True, validate_row=False)
+            if set(normalised).intersection(primary_keys):
+                raise ApiError(400, "主键字段不能在批量更新中修改")
+            if not normalised:
+                raise ApiError(400, "至少需要修改一个有效字段")
+            assignments = ", ".join(f"{quote_identifier(col)}=?" for col in normalised)
+            val_params = [normalised[col] for col in normalised]
+            sql_base = f"UPDATE {quote_identifier(canonical)} SET {assignments}, _version=_version+1 WHERE rtu_id=? AND pnt_no=?"
+            sql_ver = sql_base + " AND _version=?"
+            with self.connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                for rtu_id, pnt_no, version in parsed:
+                    if version is not None:
+                        rc = connection.execute(sql_ver, (*val_params, rtu_id, pnt_no, version)).rowcount
+                    else:
+                        rc = connection.execute(sql_base, (*val_params, rtu_id, pnt_no)).rowcount
+                    if rc > 0:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                        if len(errors) < 50:
+                            errors.append({"rtu_id": rtu_id, "pnt_no": pnt_no, "reason": "记录不存在或版本已变更"})
+                connection.commit()
+            if succeeded:
+                audit.emit("数据库已提交", operation="四遥批量更新", table=canonical,
+                           succeeded=succeeded, failed=failed, fields=sorted(normalised))
+        else:
+            sql_base = f"DELETE FROM {quote_identifier(canonical)} WHERE rtu_id=? AND pnt_no=?"
+            sql_ver = sql_base + " AND _version=?"
+            with self.connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                for rtu_id, pnt_no, version in parsed:
+                    try:
+                        if version is not None:
+                            rc = connection.execute(sql_ver, (rtu_id, pnt_no, version)).rowcount
+                        else:
+                            rc = connection.execute(sql_base, (rtu_id, pnt_no)).rowcount
+                    except sqlite3.IntegrityError:
+                        rc = 0
+                        failed += 1
+                        if len(errors) < 50:
+                            errors.append({"rtu_id": rtu_id, "pnt_no": pnt_no, "reason": "记录仍被其他表引用"})
+                        continue
+                    if rc > 0:
+                        succeeded += 1
+                    else:
+                        failed += 1
+                        if len(errors) < 50:
+                            errors.append({"rtu_id": rtu_id, "pnt_no": pnt_no, "reason": "记录不存在或版本已变更"})
+                connection.commit()
+            if succeeded:
+                audit.emit("数据库已提交", operation="四遥批量删除", table=canonical,
+                           succeeded=succeeded, failed=failed)
+
+        return {
+            "kind": kind_key,
+            "action": act,
+            "requested": len(parsed),
+            "succeeded": succeeded,
+            "failed": failed,
+            "errors": errors,
+        }
+
+    def export_points_csv(self, kind: str, *, rtu_id: int | None = None, search: str = "") -> bytes:
+        """导出四遥点表 CSV（UTF-8 BOM + 公式注入防护）。"""
+        import csv
+        import io
+
+        kind_key = str(kind or "").strip().lower()
+        table = KIND_TABLES.get(kind_key)
+        if not table:
+            raise ApiError(400, "测点类型必须是 yc、yx、yt 或 yk")
+        export_cols = {
+            "yc": ["rtu_id", "pnt_no", "name", "raw_scale", "raw_base", "value_zone", "raw_value", "value", "status", "refresh_time"],
+            "yx": ["rtu_id", "pnt_no", "name", "name_0", "name_1", "value", "status", "refresh_time"],
+            "yt": ["rtu_id", "pnt_no", "name", "raw_scale", "raw_base", "raw_value", "value", "status", "refresh_time"],
+            "yk": ["rtu_id", "pnt_no", "name", "value", "status", "cmd_time", "cmd_handle_time"],
+        }[kind_key]
+        schema_cols = {c["eng_name"] for c in self.schema(table)["columns"]}
+        cols = [col for col in export_cols if col in schema_cols]
+        col_sql = ", ".join(quote_identifier(c) for c in cols)
+        clauses: list[str] = []
+        params: list[Any] = []
+        if rtu_id is not None:
+            clauses.append("rtu_id = ?")
+            params.append(int(rtu_id))
+        q = str(search or "").strip()
+        if q:
+            like = f"%{q}%"
+            clauses.append("(CAST(pnt_no AS TEXT) LIKE ? OR COALESCE(name, '') LIKE ?)")
+            params.extend([like, like])
+        where_sql = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        with self.connection() as connection:
+            rows = connection.execute(
+                f"SELECT {col_sql} FROM {quote_identifier(table)}{where_sql} ORDER BY rtu_id ASC, pnt_no ASC LIMIT 50000",
+                params,
+            ).fetchall()
+
+        def _safe_cell(val: Any) -> str:
+            if val is None:
+                return ""
+            text = str(val)
+            if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+                return "'" + text
+            return text
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(cols)
+        for row in rows:
+            writer.writerow([_safe_cell(row[col]) for col in cols])
+        return ("\ufeff" + buf.getvalue()).encode("utf-8")
+
+    def import_points_csv(
+        self,
+        kind: str,
+        content: str,
+        *,
+        rtu_id: int | None = None,
+        dry_run: bool = False,
+        on_conflict: str = "skip",
+    ) -> dict[str, Any]:
+        """从 CSV 预检或批量导入 C 端四遥点定义，单事务提交。"""
+        import csv
+        import io
+
+        kind_key = str(kind or "").strip().lower()
+        table = KIND_TABLES.get(kind_key)
+        if not table:
+            raise ApiError(400, "测点类型必须是 yc、yx、yt 或 yk")
+        mode = str(on_conflict or "skip").strip().lower()
+        if mode not in ("skip", "overwrite"):
+            raise ApiError(400, "on_conflict 必须是 skip 或 overwrite")
+        if not isinstance(content, str) or not content.strip():
+            raise ApiError(400, "CSV 内容不能为空")
+
+        schema_columns = {c["eng_name"]: c for c in self.schema(table)["columns"]}
+        allowed_import_cols = {
+            "yc": {"rtu_id", "pnt_no", "name", "raw_scale", "raw_base", "value_zone"},
+            "yx": {"rtu_id", "pnt_no", "name", "name_0", "name_1"},
+            "yt": {"rtu_id", "pnt_no", "name", "raw_scale", "raw_base"},
+            "yk": {"rtu_id", "pnt_no", "name"},
+        }[kind_key] & set(schema_columns)
+
+        reader = csv.DictReader(io.StringIO(content.lstrip("\ufeff")))
+        if not reader.fieldnames:
+            raise ApiError(400, "CSV 缺少表头")
+        headers = [str(h or "").strip() for h in reader.fieldnames]
+        if "pnt_no" not in headers:
+            raise ApiError(400, "CSV 必须包含 pnt_no 列")
+        if rtu_id is None and "rtu_id" not in headers:
+            raise ApiError(400, "未指定默认 RTU 时，CSV 必须包含 rtu_id 列")
+
+        rows_raw = list(reader)
+        if len(rows_raw) > 20000:
+            raise ApiError(400, "单次最多导入 20000 行")
+
+        with self.connection() as connection:
+            existing_rtus = {
+                int(r[0]) for r in connection.execute("SELECT rtu_id FROM fes_rtu_define").fetchall()
+            }
+            existing_keys = {
+                (int(r[0]), int(r[1]))
+                for r in connection.execute(f"SELECT rtu_id, pnt_no FROM {quote_identifier(table)}").fetchall()
+            }
+
+        seen: set[tuple[int, int]] = set()
+        to_create: list[dict[str, Any]] = []
+        to_update: list[tuple[tuple[int, int], dict[str, Any]]] = []
+        conflicts: list[dict[str, Any]] = []
+        errors: list[dict[str, Any]] = []
+        skipped = 0
+
+        for line_no, raw in enumerate(rows_raw, start=2):
+            cleaned = {str(k or "").strip(): (v.strip() if isinstance(v, str) else v) for k, v in raw.items() if k}
+            if not any(cleaned.values()):
+                continue
+            try:
+                rid = int(rtu_id) if rtu_id is not None and not cleaned.get("rtu_id") else int(cleaned.get("rtu_id", ""))
+                pno = int(cleaned.get("pnt_no", ""))
+            except (TypeError, ValueError):
+                errors.append({"line": line_no, "reason": "rtu_id 或 pnt_no 不是有效整数"})
+                continue
+            if rid not in existing_rtus:
+                errors.append({"line": line_no, "rtu_id": rid, "pnt_no": pno, "reason": f"RTU {rid} 不存在"})
+                continue
+            key = (rid, pno)
+            if key in seen:
+                conflicts.append({"line": line_no, "rtu_id": rid, "pnt_no": pno, "reason": "CSV 文件内主键重复"})
+                skipped += 1
+                continue
+            seen.add(key)
+
+            payload: dict[str, Any] = {"rtu_id": rid, "pnt_no": pno}
+            row_err = ""
+            for col in allowed_import_cols:
+                if col in ("rtu_id", "pnt_no"):
+                    continue
+                if col not in cleaned or cleaned[col] == "":
+                    continue
+                val = cleaned[col]
+                if val.startswith("'") and len(val) > 1 and val[1] in ("=", "+", "-", "@"):
+                    val = val[1:]
+                col_meta = schema_columns[col]
+                try:
+                    if col_meta["data_type"] == "float":
+                        payload[col] = float(val)
+                    elif col_meta["data_type"] == "int":
+                        payload[col] = int(val)
+                    else:
+                        payload[col] = val
+                except (TypeError, ValueError):
+                    row_err = f"字段 {col} 值无效: {val}"
+                    break
+            if row_err:
+                errors.append({"line": line_no, "rtu_id": rid, "pnt_no": pno, "reason": row_err})
+                continue
+
+            if key in existing_keys:
+                conflicts.append({"line": line_no, "rtu_id": rid, "pnt_no": pno, "reason": "库中已存在"})
+                if mode == "overwrite":
+                    upd = {k: v for k, v in payload.items() if k not in ("rtu_id", "pnt_no")}
+                    if upd:
+                        to_update.append((key, upd))
+                    else:
+                        skipped += 1
+                else:
+                    skipped += 1
+            else:
+                to_create.append(payload)
+
+        created = 0
+        updated = 0
+        if not dry_run and not errors and (to_create or to_update):
+            with self.connection() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                for item in to_create:
+                    norm = self._normalise(table, item, partial=False)
+                    cols = list(norm.keys())
+                    placeholders = ", ".join("?" for _ in cols)
+                    col_sql = ", ".join(quote_identifier(c) for c in cols)
+                    connection.execute(
+                        f"INSERT INTO {quote_identifier(table)} ({col_sql}) VALUES ({placeholders})",
+                        [norm[c] for c in cols],
+                    )
+                    created += 1
+                for (rid, pno), upd in to_update:
+                    norm = self._normalise(table, upd, partial=True)
+                    if not norm:
+                        continue
+                    sets = ", ".join(f"{quote_identifier(c)}=?" for c in norm)
+                    connection.execute(
+                        f"UPDATE {quote_identifier(table)} SET {sets}, _version=_version+1 WHERE rtu_id=? AND pnt_no=?",
+                        [*norm.values(), rid, pno],
+                    )
+                    updated += 1
+                connection.commit()
+            audit.emit("数据库已提交", operation="四遥 CSV 导入", table=table,
+                       created=created, updated=updated, skipped=skipped)
+
+        return {
+            "kind": kind_key,
+            "dry_run": bool(dry_run),
+            "on_conflict": mode,
+            "total_rows": len(rows_raw),
+            "would_create": len(to_create),
+            "would_update": len(to_update),
+            "created": created,
+            "updated": updated,
+            "skipped": skipped,
+            "conflicts": conflicts[:50],
+            "conflict_count": len(conflicts),
+            "errors": errors[:50],
+            "error_count": len(errors),
+        }
+

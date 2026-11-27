@@ -127,23 +127,59 @@
     state.rtuPopulated = true;
   }
 
+  const ptTableCache = { rows: [] };
+  let ptAbortController = null;
+
+  function renderChainBar(chain) {
+    const bar = document.getElementById('pt-chain-bar');
+    if (!bar || !chain) return;
+    const sim = chain.simulator || {};
+    const src = chain.source || {};
+    const fwd = chain.forward || {};
+    const simText = sim.available
+      ? `RTU ${sim.rtu_count} · 运行 ${sim.running_count}`
+      : '独立仿真库';
+    const srcText = src.focus
+      ? `RTU ${src.focus.rtu_id} (${src.focus.channel_type || '—'}) · 通道 ${src.focus.channel_id ?? '—'} · 四遥 ${src.point_total}`
+      : `RTU ${src.rtu_count} · 运行 ${src.running_count} · 错误 ${src.error_count} · 四遥 ${src.point_total}`;
+    const fwdText = `转发通道 ${fwd.channel_count} · 已映射 ${fwd.mapped_points} 点` + (fwd.diff_points > 0 ? ` · 偏差 ${fwd.diff_points}` : ' · 零偏差');
+    const srcCls = src.error_count > 0 ? ' is-err' : '';
+    const fwdCls = fwd.diff_points > 0 ? ' is-warn' : '';
+    bar.innerHTML =
+      `<div class="pt-chain-node"><strong>仿真 S</strong><span>${esc(simText)}</span></div>` +
+      '<span class="pt-chain-arrow" aria-hidden="true">→</span>' +
+      `<div class="pt-chain-node${srcCls}"><strong>采集 C</strong><span>${esc(srcText)}</span></div>` +
+      '<span class="pt-chain-arrow" aria-hidden="true">→</span>' +
+      `<div class="pt-chain-node${fwdCls}"><strong>转发 T</strong><span>${esc(fwdText)}</span></div>`;
+    bar.hidden = false;
+  }
+
   function renderRows(items) {
     if (!els.tbody) return;
     if (!items || !items.length) {
-      els.tbody.innerHTML = '<tr><td colspan="8" class="pt-empty">当前筛选下无匹配测点</td></tr>';
+      const emptyRow = ['<tr><td colspan="8" class="pt-empty">当前筛选下无匹配测点</td></tr>'];
+      if (window.scadaTableReconcile?.reconcileBody) {
+        window.scadaTableReconcile.reconcileBody(els.tbody, emptyRow, ptTableCache, { patchCells: false, flash: false });
+      } else {
+        els.tbody.innerHTML = emptyRow[0];
+      }
       return;
     }
     const canCommand = state.component === 'c' && (state.kind === 'yk' || state.kind === 'yt');
-    const html = items.map((item) => {
+    const tr = window.scadaTableReconcile;
+    const rows = items.map((item) => {
       const hasFwd = item.fwd_channel_id !== null && item.fwd_channel_id !== undefined;
       const diff = hasFwd && isValueDiff(item.src_value, item.fwd_value);
       const srcValCell = state.kind === 'yc' && item.raw_value !== null && item.raw_value !== undefined
         ? `<span class="pt-main-val">${esc(fmtVal(item.src_value))}</span><span class="pt-sub">原值 ${esc(fmtVal(item.raw_value))}</span>`
         : `<span class="pt-main-val">${esc(fmtVal(item.src_value))}</span>`;
 
-      const srcStatusBadge = item.src_status === 0
-        ? '<span class="pt-badge ok">正常</span>'
-        : (item.src_status == null ? '<span class="pt-badge">—</span>' : `<span class="pt-badge warn">状态 ${esc(item.src_status)}</span>`);
+      const stInfo = tr?.decodePointStatus
+        ? tr.decodePointStatus(item.src_status)
+        : { label: item.src_status === 0 ? '正常' : (item.src_status == null ? '—' : `状态 ${item.src_status}`), level: item.src_status === 0 ? 'ok' : 'warn', detail: '' };
+      const srcStatusBadge = `<span class="scada-badge scada-badge-${stInfo.level}" title="${esc(stInfo.detail)}">${esc(stInfo.label)}</span>`;
+      const srcRel = tr?.formatRelativeTime ? tr.formatRelativeTime(item.src_refresh_time, 60) : { text: fmtTime(item.src_refresh_time), full: fmtTime(item.src_refresh_time), stale: false };
+      const fwdRel = tr?.formatRelativeTime ? tr.formatRelativeTime(item.forward_time, 60) : { text: fmtTime(item.forward_time), full: fmtTime(item.forward_time), stale: false };
 
       const fwdChanCell = hasFwd
         ? `<span>通道 ${esc(item.fwd_channel_id)}${item.fwd_channel_name ? ' · ' + esc(item.fwd_channel_name) : ''}</span>`
@@ -157,7 +193,7 @@
       const fwdValCell = hasFwd
         ? `<span class="pt-main-val">${esc(fmtVal(item.fwd_value))}</span>`
           + (diff ? ' <span class="pt-badge warn" title="采集值与转发值不一致">偏差</span>' : '')
-          + `<span class="pt-sub">${esc(fmtTime(item.forward_time))}</span>`
+          + `<span class="pt-sub${fwdRel.stale ? ' scada-stale' : ''}" title="${esc(fwdRel.full)}">${esc(fwdRel.text)}</span>`
         : '<span class="muted">—</span>';
 
       const actions = [];
@@ -174,15 +210,19 @@
       return `<tr>
         <td><span>RTU ${esc(item.rtu_id)}${item.rtu_name ? ' · ' + esc(item.rtu_name) : ''}</span><span class="pt-sub">通道 ${esc(item.src_channel_id ?? '—')} · ${esc(item.src_protocol || '—')}</span></td>
         <td><span class="pt-main-val">#${esc(item.pnt_no)}</span> ${esc(item.pnt_name || '—')}</td>
-        <td class="col-num">${srcValCell}</td>
-        <td>${srcStatusBadge}<span class="pt-sub">${esc(fmtTime(item.src_refresh_time))}</span></td>
+        <td class="col-num scada-num" data-watch-val="${esc(item.src_value ?? '')}">${srcValCell}</td>
+        <td data-watch-val="${esc(item.src_status ?? '')}">${srcStatusBadge}<span class="pt-sub${srcRel.stale ? ' scada-stale' : ''}" title="${esc(srcRel.full)}">${esc(srcRel.text)}${srcRel.stale ? ' · 陈旧' : ''}</span></td>
         <td>${fwdChanCell}</td>
         <td>${fwdAddrCell}</td>
-        <td class="col-num">${fwdValCell}</td>
+        <td class="col-num scada-num" data-watch-val="${esc(item.fwd_value ?? '')}">${fwdValCell}</td>
         <td><div class="pt-actions">${actions.join('')}</div></td>
       </tr>`;
-    }).join('');
-    els.tbody.innerHTML = html;
+    });
+    if (tr?.reconcileBody) {
+      tr.reconcileBody(els.tbody, rows, ptTableCache, { patchCells: true, flash: true });
+    } else {
+      els.tbody.innerHTML = rows.join('');
+    }
   }
 
   function updatePager() {
@@ -199,7 +239,8 @@
   }
 
   async function loadData(silent = false) {
-    if (state.loading) return;
+    if (ptAbortController) ptAbortController.abort();
+    ptAbortController = typeof AbortController === 'function' ? new AbortController() : null;
     state.loading = true;
     if (!silent && els.summary) els.summary.textContent = '刷新中…';
     try {
@@ -212,9 +253,17 @@
       });
       if (state.rtuId) qs.set('rtu_id', state.rtuId);
       if (state.q) qs.set('q', state.q);
-      const res = await fetch(`/api/point-trace?${qs.toString()}`, { cache: 'no-cache' });
+      const chainUrl = '/api/chain-overview' + (state.rtuId ? `?rtu_id=${encodeURIComponent(state.rtuId)}` : '');
+      const [res, chainRes] = await Promise.all([
+        fetch(`/api/point-trace?${qs.toString()}`, { cache: 'no-cache', signal: ptAbortController?.signal }),
+        fetch(chainUrl, { cache: 'no-cache', signal: ptAbortController?.signal }).catch(() => null),
+      ]);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (chainRes && chainRes.ok) {
+        const chain = await chainRes.json().catch(() => null);
+        if (chain) renderChainBar(chain);
+      }
       state.component = data.component || state.component;
       state.total = Number(data.total || 0);
       state.mappedTotal = Number(data.mapped_total || 0);
@@ -228,6 +277,7 @@
         els.summary.textContent = `共 ${state.total} 条 · 已映射 ${state.mappedTotal} 条 · ${now}`;
       }
     } catch (err) {
+      if (err?.name === 'AbortError') return;
       if (els.summary) els.summary.textContent = `加载失败：${err.message}`;
       if (!silent && els.tbody) {
         els.tbody.innerHTML = `<tr><td colspan="8" class="pt-empty">${esc(err.message)}</td></tr>`;

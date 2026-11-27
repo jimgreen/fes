@@ -116,7 +116,15 @@
       channelRows = rows;
       if (request !== channelsRequest) return;
       if ($("#channels")) {
-        $("#channels").innerHTML = rows.map(r => `<tr data-select="${esc(r.rtu_id)}"><td>${esc(r.rtu_id)}</td><td>${esc(r.channel_id)}</td><td>${esc(r.channel_type)}</td><td>${esc(r.name || "")}</td><td>${r.process_enable ? "启用" : "停用"}</td><td><a href="/points?rtu_id=${encodeURIComponent(r.rtu_id)}">四遥数据</a> <button type="button" data-edit='${esc(JSON.stringify(r))}'>编辑</button> <button type="button" class="danger" data-version="${esc(r._version)}" data-delete='${esc(r.rtu_id)}'>删除</button> <button type="button" data-export-efile="${esc(r.rtu_id)}">导出 E 文件</button></td></tr>`).join("") || '<tr><td colspan="6">暂无通道</td></tr>';
+        const chRows = rows.length
+          ? rows.map(r => `<tr data-select="${esc(r.rtu_id)}"><td>${esc(r.rtu_id)}</td><td>${esc(r.channel_id)}</td><td>${esc(r.channel_type)}</td><td>${esc(r.name || "")}</td><td data-watch-val="${r.process_enable ? "1" : "0"}">${r.process_enable ? "启用" : "停用"}</td><td><a href="/points?rtu_id=${encodeURIComponent(r.rtu_id)}">四遥数据</a> <button type="button" data-edit='${esc(JSON.stringify(r))}'>编辑</button> <button type="button" class="danger" data-version="${esc(r._version)}" data-delete='${esc(r.rtu_id)}'>删除</button> <button type="button" data-export-efile="${esc(r.rtu_id)}">导出 E 文件</button></td></tr>`)
+          : ['<tr><td colspan="6">暂无通道</td></tr>'];
+        if (window.scadaTableReconcile?.reconcileBody) {
+          const cache = ($("#channels")._reconcileCache ||= { rows: [] });
+          window.scadaTableReconcile.reconcileBody($("#channels"), chRows, cache, { patchCells: true, flash: true });
+        } else {
+          $("#channels").innerHTML = chRows.join("");
+        }
         notice("#channel-message", `共 ${rows.length} 个通道`);
       }
       if ($("#point-rtu")) {

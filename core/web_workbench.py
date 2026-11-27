@@ -6,7 +6,10 @@ import re
 ASSET_DIR = Path(__file__).with_name("web_static")
 ASSETS = {"workbench.css": "text/css; charset=utf-8",
           "ui-theme.css": "text/css; charset=utf-8",
+          "theme-init.js": "application/javascript; charset=utf-8",
           "ui-i18n.js": "application/javascript; charset=utf-8",
+          "ui-i18n-dict.js": "application/javascript; charset=utf-8",
+          "table-reconcile.js": "application/javascript; charset=utf-8",
           "connections.css": "text/css; charset=utf-8",
           "connections.js": "application/javascript; charset=utf-8",
           "audit-client.js": "application/javascript; charset=utf-8",
@@ -154,10 +157,12 @@ def render_workbench(data: bytes, module: str, filename: str) -> bytes:
     html = data.decode("utf-8")
     if "data-theme=" not in html[:256]:
         html = html.replace("<html ", '<html data-theme="minimalist-light" ', 1)
-    html = html.replace("<head>", '<head><script src="/static/audit-client.js"></script>', 1)
+    html = html.replace("<head>", '<head><script src="/static/theme-init.js"></script><script src="/static/audit-client.js"></script>', 1)
     head_extra = '<link rel="stylesheet" href="/static/workbench.css"><link rel="stylesheet" href="/static/database-selector.css">'
     if "/static/ui-theme.css" not in html:
         head_extra += '<link rel="stylesheet" href="/static/ui-theme.css">'
+    if "/static/table-reconcile.js" not in html:
+        head_extra += '<script defer src="/static/table-reconcile.js"></script>'
     if "/static/ui-i18n.js" not in html:
         head_extra += '<script defer src="/static/ui-i18n.js"></script>'
     head_extra += (

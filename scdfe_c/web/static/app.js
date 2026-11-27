@@ -913,15 +913,36 @@ function loadRows({fresh = false} = {}) {
   pendingRows = pending;
   return pending.promise;
 }
+let rowsAbortController = null;
+function syncUrlState() {
+  if (typeof history === "undefined" || typeof history.replaceState !== "function") return;
+  try {
+    const url = new URL(location.href);
+    const q = url.searchParams;
+    if (state.rtu) q.set("rtu_id", state.rtu); else q.delete("rtu_id");
+    const searchVal = ($("#search")?.value || "").trim();
+    if (searchVal) q.set("q", searchVal); else q.delete("q");
+    if (state.view && state.view !== "common") q.set("view", state.view); else q.delete("view");
+    if (state.sort) { q.set("sort", state.sort); q.set("order", state.order); }
+    else { q.delete("sort"); q.delete("order"); }
+    if (state.offset > 0) q.set("offset", String(state.offset)); else q.delete("offset");
+    history.replaceState(null, "", url.pathname + (q.toString() ? "?" + q.toString() : "") + url.hash);
+  } catch (_) { /* ignore */ }
+}
+
 async function performLoadRows(ctx, path) {
   const sequence = ++state.request;
+  if (rowsAbortController) rowsAbortController.abort();
+  rowsAbortController = typeof AbortController === "function" ? new AbortController() : null;
   state.loading = true;
   guardTableScope(ctx);
   showView();
+  const csvImportBtn = $("#import-points-csv");
+  if (csvImportBtn) csvImportBtn.hidden = !pointKinds.includes(ctx.resource);
   $("#table-error").hidden = true;
   $("#add").disabled = true;
   try {
-    const data = await api(path);
+    const data = await api(path, { signal: rowsAbortController?.signal });
     if (sequence !== state.request) return;
     if (state.offset && state.offset >= data.total) {
       state.offset = Math.max(
@@ -933,11 +954,12 @@ async function performLoadRows(ctx, path) {
     state.items = data.items;
     state.total = data.total;
     renderTable();
+    syncUrlState();
     $("#add").disabled = false;
     $("#health").className = "health ok";
     markUpdated();
   } catch (error) {
-    if (sequence !== state.request) return;
+    if (error?.name === "AbortError" || sequence !== state.request) return;
     state.items = [];
     state.total = 0;
     renderTable();
@@ -988,6 +1010,10 @@ function _parseRowCells(trMarkup) {
   return tr ? Array.from(tr.cells) : null;
 }
 function reconcileBody(body, rows, cache, patchCells = false) {
+  if (window.scadaTableReconcile?.reconcileBody) {
+    window.scadaTableReconcile.reconcileBody(body, rows, cache, { patchCells, flash: true });
+    return;
+  }
   const changed = [];
   if (rows.length === cache.rows.length) {
     rows.forEach((markup, index) => {
@@ -996,7 +1022,6 @@ function reconcileBody(body, rows, cache, patchCells = false) {
   }
   let cells = null;
   if (patchCells && changed.length && rows.length === cache.rows.length && body.rows && body.rows.length === rows.length) {
-    // 使用原生 DOM 解析替换变化单元格，避免脆弱正则在嵌套内容下误切。
     const updates = [];
     let count = 0;
     let valid = true;
@@ -1020,7 +1045,6 @@ function reconcileBody(body, rows, cache, patchCells = false) {
   } else if (rows.length !== cache.rows.length || changed.length > rows.length / 4) {
     body.innerHTML = rows.join("");
   } else {
-    // Keep focus and selection on unaffected rows; parse dense updates once.
     for (const index of changed) body.children[index].outerHTML = rows[index];
   }
   cache.rows = rows;
@@ -1118,16 +1142,28 @@ function renderTable() {
             ? '<td class="col-check"><input type="checkbox" data-batch-key="' + esc(key) + '"' + (checked ? " checked" : "") + ' aria-label="选择该行"></td>'
             : "") +
           columns
-            .map(
-              (column, columnIndex) =>
-                '<td class="' +
-                (column.primary_key ? "key" : "") +
-                '" title="' +
-                esc(values[columnIndex] ?? "—") +
-                '">' +
-                cellValue(column.eng_name, values[columnIndex], schema.head.eng_name) +
-                "</td>"
-            )
+            .map((column, columnIndex) => {
+              const rawVal = values[columnIndex];
+              const colName = column.eng_name;
+              const isWatch = ["value", "raw_value", "status", "raw_status"].includes(colName);
+              const isNum = ["value", "raw_value", "raw_scale", "raw_base", "value_zone"].includes(colName);
+              const cls = [column.primary_key ? "key" : "", isNum ? "scada-num" : ""].filter(Boolean).join(" ");
+              const watchAttr = isWatch ? ' data-watch-val="' + esc(rawVal ?? "") + '"' : "";
+              let titleText = rawVal ?? "—";
+              let contentHtml = cellValue(colName, rawVal, schema.head.eng_name);
+              if (colName === "refresh_time" && window.scadaTableReconcile?.formatRelativeTime) {
+                const rel = window.scadaTableReconcile.formatRelativeTime(rawVal, 60);
+                titleText = rel.full;
+                contentHtml =
+                  '<span class="' + (rel.stale ? "scada-stale" : "") + '">' + esc(rel.text) + "</span>" +
+                  (rel.stale ? '<span class="scada-stale-tag">陈旧</span>' : "");
+              } else if ((colName === "status" || colName === "raw_status") && pointKinds.includes(state.resource) && window.scadaTableReconcile?.decodePointStatus) {
+                const st = window.scadaTableReconcile.decodePointStatus(rawVal);
+                titleText = st.detail;
+                contentHtml = '<span class="scada-badge scada-badge-' + st.level + '">' + esc(st.label) + "</span>";
+              }
+              return '<td class="' + cls + '"' + watchAttr + ' title="' + esc(titleText) + '">' + contentHtml + "</td>";
+            })
             .join("") +
           '<td class="actions-cell sticky-actions">' +
           (["yk", "yt"].includes(state.resource)
@@ -2236,8 +2272,33 @@ $("#process-rows").onchange = (event) => {
   if (event.target.dataset.processInclude) controlProcess(event.target.dataset.processInclude, "configure", { include_in_all: event.target.checked });
 };
 
+let scdfeAbortController = null;
+const monitorPrevCounts = new Map();
+const monitorThroughputHistory = [];
+
+function renderScdfeSparkline(fpsTotal) {
+  const host = $("#scdfe-sparkline");
+  if (!host) return;
+  monitorThroughputHistory.push(Number.isFinite(fpsTotal) ? Math.max(0, fpsTotal) : 0);
+  if (monitorThroughputHistory.length > 24) monitorThroughputHistory.shift();
+  const maxVal = Math.max(1, ...monitorThroughputHistory);
+  const w = 84;
+  const h = 20;
+  const n = monitorThroughputHistory.length;
+  const pts = monitorThroughputHistory.map((v, i) => {
+    const x = n <= 1 ? w : (i / (n - 1)) * w;
+    const y = h - 2 - (v / maxVal) * (h - 4);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  host.innerHTML =
+    `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}"></polyline></svg>` +
+    `<span>${fpsTotal.toFixed(1)} 帧/s</span>`;
+}
+
 async function loadScdfe() {
   const request = ++monitor.request;
+  if (scdfeAbortController) scdfeAbortController.abort();
+  scdfeAbortController = typeof AbortController === "function" ? new AbortController() : null;
   monitor.loading = true;
   const params = new URLSearchParams({
     limit: String(monitor.limit),
@@ -2249,8 +2310,8 @@ async function loadScdfe() {
   else if (filter !== "") params.set("process_status", filter);
   try {
     const [data, procData] = await Promise.all([
-      api("/api/scdfe_c/status?" + params),
-      api("/api/processes").catch(() => null),
+      api("/api/scdfe_c/status?" + params, { signal: scdfeAbortController?.signal }),
+      api("/api/processes", { signal: scdfeAbortController?.signal }).catch(() => null),
     ]);
     if (request !== monitor.request) return;
     renderScdfeCoreProcs(procData?.items || []);
@@ -2272,21 +2333,29 @@ async function loadScdfe() {
       [
         statusBadge(item.process_status),
         "主进程 · PID " + esc(item.process_pid || "—"),
+        "",
       ],
-      [esc(data.counts.total), "RTU 总数"],
-      [esc(data.counts.running), "线程运行中"],
-      [esc(data.counts.errors), "线程错误"],
-      [esc(data.counts.automatic), "参与自动通信"],
+      [esc(data.counts.total), "RTU 总数", ""],
+      [esc(data.counts.running), "线程运行中", "2"],
+      [esc(data.counts.errors), "线程错误", "5"],
+      [esc(data.counts.automatic), "参与自动通信", ""],
     ]
       .map(
-        ([value, label]) =>
-          '<div class="metric"><strong>' +
+        ([value, label, statusJump]) =>
+          '<div class="metric' + (statusJump ? ' is-clickable' : '') + '"' +
+          (statusJump ? ' data-jump-thread-status="' + statusJump + '" title="点击筛选该状态线程"' : "") +
+          "><strong>" +
           value +
           "</strong><span>" +
           label +
           "</span></div>",
       )
       .join("");
+    const retryBtn = $("#thread-retry-errors");
+    if (retryBtn) retryBtn.hidden = !(Number(data.counts.errors || 0) > 0);
+    const errBtn = $("#thread-errors-only");
+    if (errBtn) errBtn.classList.toggle("selected", $("#thread-status").value === "5");
+
     $("#scdfe-details").innerHTML =
       [
         ["启动", fmtTime(item.process_start_time)],
@@ -2309,50 +2378,85 @@ async function loadScdfe() {
       if (!endpoint) return ["can", "modbus-rtu"].includes(row.channel_type) ? "不适用" : "—";
       const host = String(endpoint.host);
       const address = (host.includes(":") && !host.startsWith("[") ? `[${host}]` : host) + ":" + endpoint.port;
-      return '<span class="mono">' + esc(address) + '</span><span class="cell-sub">远端 · ' + esc(endpoint.transport) + '</span>';
+      return (
+        '<span class="mono">' + esc(address) + '</span>' +
+        '<button type="button" class="scada-copy-btn" data-copy="' + esc(address) + '" title="复制地址">复制</button>' +
+        '<span class="cell-sub">远端 · ' + esc(endpoint.transport) + '</span>'
+      );
     }
+    const nowTs = Date.now();
+    let totalFps = 0;
+    const tr = window.scadaTableReconcile;
     const threadRows = data.rtus
-      .map(
-          (row, index) =>
-            "<tr>" +
-            '<td class="key">' +
-            esc(row.rtu_id) +
-            '<span class="cell-sub">' +
-            esc(row.name || "未命名") +
-            "</span></td><td>" +
-            esc(row.channel_id) +
-            '<span class="cell-sub">' +
-            esc(channelTypeLabel(row.channel_type)) +
-            "</span></td><td>" + endpointCell(row) + "</td>" +
-            "<td>" +
-            cellValue("process_enable", row.process_enable) +
-            "</td><td>" +
-            runtimeBadge(row.runtime_status, row.process_status) +
-            "</td><td>" +
-            esc(row.runtime_status?.connection_state || "—") +
-            "</td><td>" +
-            esc(row.thread_id || "—") +
-            '</td><td class="mono">' +
-            esc([row.runtime_status?.rx_count || 0, row.runtime_status?.tx_count || 0, row.runtime_status?.error_count || 0].join(" / ")) +
-            "</td><td>" +
-            esc(fmtClockTime(row.runtime_status?.process_heartbeat_time || row.process_heartbeat_time)) +
-            '<span class="cell-sub">采样 ' + esc(fmtClockTime(row.runtime_status?.sampled_at)) + '</span>' +
-            "</td>" +
-            '<td class="error-cell"><button class="row-button" data-thread-detail="' +
-            index +
-            '" title="' +
-            esc(row.runtime_status?.last_error || row.process_error || "查看完整记录") +
-            '">' +
-            esc(row.runtime_status?.last_error || row.process_error || "—") +
-            "</button></td>" +
-            '<td class="sticky-actions"><button class="row-button" data-thread-log="' +
-            esc(row.rtu_id) +
-            '">日志</button><button class="row-button" data-thread-enable="' +
-            index +
-            '">' +
-            (row.process_enable === 1 ? "停用" : "启用") +
-            "</button></td></tr>",
+      .map((row, index) => {
+        const rx = Number(row.runtime_status?.rx_count || 0);
+        const tx = Number(row.runtime_status?.tx_count || 0);
+        const err = Number(row.runtime_status?.error_count || 0);
+        const prev = monitorPrevCounts.get(row.rtu_id);
+        let fpsText = "0.0/s";
+        if (prev && nowTs > prev.ts) {
+          const dt = Math.max(0.2, (nowTs - prev.ts) / 1000);
+          const delta = Math.max(0, (rx - prev.rx) + (tx - prev.tx));
+          const fps = delta / dt;
+          totalFps += fps;
+          fpsText = fps.toFixed(1) + "/s";
+        }
+        monitorPrevCounts.set(row.rtu_id, { rx, tx, err, ts: nowTs });
+        const totalFrames = rx + tx;
+        const errPct = totalFrames > 0 && err > 0 ? ` · 错 ${(err * 100 / totalFrames).toFixed(1)}%` : "";
+        const connInfo = tr?.decodeConnState
+          ? tr.decodeConnState(row.runtime_status?.connection_state)
+          : { label: row.runtime_status?.connection_state || "—", level: "muted", raw: "" };
+        const hbRaw = row.runtime_status?.process_heartbeat_time || row.process_heartbeat_time;
+        const hbRel = tr?.formatRelativeTime ? tr.formatRelativeTime(hbRaw, 30) : { text: fmtClockTime(hbRaw), full: fmtClockTime(hbRaw), stale: false };
+        const sampleRel = tr?.formatRelativeTime ? tr.formatRelativeTime(row.runtime_status?.sampled_at, 60) : { text: fmtClockTime(row.runtime_status?.sampled_at), full: "", stale: false };
+        const isRunning = Number(row.runtime_status?.process_status ?? row.process_status) === 2;
+        const hbStale = isRunning && hbRel.stale;
+
+        return (
+          "<tr>" +
+          '<td class="key">' +
+          esc(row.rtu_id) +
+          '<span class="cell-sub">' +
+          esc(row.name || "未命名") +
+          "</span></td><td>" +
+          esc(row.channel_id) +
+          '<span class="cell-sub">' +
+          esc(channelTypeLabel(row.channel_type)) +
+          "</span></td><td>" + endpointCell(row) + "</td>" +
+          "<td>" +
+          cellValue("process_enable", row.process_enable) +
+          "</td><td>" +
+          runtimeBadge(row.runtime_status, row.process_status) +
+          '</td><td data-watch-val="' + esc(connInfo.label) + '" title="' + esc(connInfo.raw || connInfo.label) + '">' +
+          '<span class="scada-badge scada-badge-' + connInfo.level + '">' + esc(connInfo.label) + "</span>" +
+          "</td><td>" +
+          esc(row.thread_id || "—") +
+          '</td><td class="mono scada-num" data-watch-val="' + esc(err > 0 ? err : rx + tx) + '" data-watch-mode="' + (err > 0 ? "warn" : "auto") + '">' +
+          esc([rx, tx, err].join(" / ")) +
+          '<span class="cell-sub">' + esc(fpsText + errPct) + "</span>" +
+          '</td><td title="' + esc(hbRel.full) + '">' +
+          '<span class="' + (hbStale ? "scada-stale" : "") + '">' + esc(hbRel.text) + "</span>" +
+          (hbStale ? '<span class="scada-stale-tag">超时</span>' : "") +
+          '<span class="cell-sub" title="' + esc(sampleRel.full) + '">采样 ' + esc(sampleRel.text) + "</span>" +
+          "</td>" +
+          '<td class="error-cell"><button class="row-button" data-thread-detail="' +
+          index +
+          '" title="' +
+          esc(row.runtime_status?.last_error || row.process_error || "查看完整记录") +
+          '">' +
+          esc(row.runtime_status?.last_error || row.process_error || "—") +
+          "</button></td>" +
+          '<td class="sticky-actions"><button class="row-button" data-thread-log="' +
+          esc(row.rtu_id) +
+          '">日志</button><button class="row-button" data-thread-enable="' +
+          index +
+          '">' +
+          (row.process_enable === 1 ? "停用" : "启用") +
+          "</button></td></tr>"
         );
+      });
+    renderScdfeSparkline(totalFps);
     reconcileBody(
       $("#scdfe-rtus"),
       threadRows.length
@@ -2372,7 +2476,7 @@ async function loadScdfe() {
     showError("#scdfe-error", null);
     markUpdated();
   } catch (error) {
-    if (request === monitor.request) showError("#scdfe-error", error);
+    if (error?.name !== "AbortError" && request === monitor.request) showError("#scdfe-error", error);
   } finally {
     if (request === monitor.request) monitor.loading = false;
   }
@@ -3446,21 +3550,19 @@ $("#batch-delete-rows")?.addEventListener("click", async () => {
     { title: "批量删除确认", confirmText: "确认删除", danger: true },
   );
   if (!ok) return;
-  let success = 0;
-  let failed = 0;
-  for (const row of targets) {
-    try {
-      await api(pathFor(ctx, row), {
-        method: "DELETE",
-        headers: { "If-Match": String(row._version) },
-      });
-      selectedRowKeys.delete(keyOf(row, schema));
-      success += 1;
-    } catch (_) {
-      failed += 1;
-    }
+  try {
+    const res = await api("/api/points/" + encodeURIComponent(state.resource) + "/batch", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "delete",
+        items: targets.map((r) => ({ rtu_id: r.rtu_id, pnt_no: r.pnt_no, _version: r._version })),
+      }),
+    });
+    selectedRowKeys.clear();
+    toast(res.failed ? `批量删除完成：成功 ${res.succeeded} 条，失败 ${res.failed} 条` : `已单事务批量删除 ${res.succeeded} 条记录`, res.failed > 0);
+  } catch (err) {
+    toast(err.message, true);
   }
-  toast(failed ? `批量删除完成：成功 ${success} 条，失败 ${failed} 条` : `已批量删除 ${success} 条记录`, failed > 0);
   await loadRows({ fresh: true });
   await refreshSummary();
 });
@@ -3498,48 +3600,238 @@ $("#batch-scale-form")?.addEventListener("submit", async (event) => {
   const btn = $("#submit-batch-scale");
   btn.disabled = true;
   $("#batch-scale-error").textContent = "";
-  let success = 0;
-  let failed = 0;
   try {
-    for (const row of targets) {
-      try {
-        await api(pathFor(ctx, row), {
-          method: "PATCH",
-          headers: { "If-Match": String(row._version) },
-          body: JSON.stringify(body),
-        });
-        success += 1;
-      } catch (_) {
-        failed += 1;
-      }
-    }
+    const res = await api("/api/points/yc/batch", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "update",
+        items: targets.map((r) => ({ rtu_id: r.rtu_id, pnt_no: r.pnt_no, _version: r._version })),
+        values: body,
+      }),
+    });
     $("#batch-scale-dialog")?.close();
-    toast(failed ? `批量更新完成：成功 ${success} 条，失败 ${failed} 条` : `已批量更新 ${success} 条遥测参数`, failed > 0);
+    toast(res.failed ? `批量更新完成：成功 ${res.succeeded} 条，失败 ${res.failed} 条` : `已单事务批量更新 ${res.succeeded} 条遥测参数`, res.failed > 0);
     await loadRows({ fresh: true });
+  } catch (err) {
+    $("#batch-scale-error").textContent = err.message;
   } finally {
     btn.disabled = false;
   }
 });
 
-setInterval(() => {
-  if (
-    document.hidden ||
-    document.querySelector("dialog[open]") ||
-    state.saving
-  )
+// ==================== 一键复制 / 异常筛选与恢复 / CSV 导出与预检导入 / 动态刷新频率 ====================
+document.addEventListener("click", async (event) => {
+  const copyBtn = event.target.closest?.("[data-copy]");
+  if (copyBtn) {
+    event.stopPropagation();
+    const text = copyBtn.dataset.copy || "";
+    const ok = await window.scadaTableReconcile?.copyText?.(text);
+    toast(ok ? `已复制：${text}` : "复制失败", !ok);
     return;
-  // Log and packet directories are external file state. Keep their catalogue
-  // live whenever the log page is open, even if the general data refresh
-  // toggle is disabled; the reader preserves the current selection/filter.
+  }
+  const jumpMetric = event.target.closest?.("[data-jump-thread-status]");
+  if (jumpMetric) {
+    const target = jumpMetric.dataset.jumpThreadStatus || "";
+    const sel = $("#thread-status");
+    if (sel) {
+      sel.value = sel.value === target ? "" : target;
+      monitor.offset = 0;
+      loadScdfe();
+    }
+  }
+});
+
+$("#thread-errors-only")?.addEventListener("click", () => {
+  const sel = $("#thread-status");
+  if (!sel) return;
+  sel.value = sel.value === "5" ? "" : "5";
+  monitor.offset = 0;
+  loadScdfe();
+});
+
+$("#thread-retry-errors")?.addEventListener("click", async () => {
+  const errored = (monitor.rows || []).filter((r) => Number(r.runtime_status?.process_status ?? r.process_status) === 5);
+  if (!errored.length) {
+    toast("当前页无错误状态线程");
+    return;
+  }
+  const ok = await window.scadaConfirm(
+    `确认重新触发当前页 ${errored.length} 个异常 RTU 的自动通信恢复？`,
+    { title: "重置异常线程", confirmText: "确认执行", danger: false },
+  );
+  if (!ok) return;
+  let count = 0;
+  for (const row of errored) {
+    try {
+      await api("/api/rtus/" + encodeURIComponent(row.rtu_id), {
+        method: "PATCH",
+        headers: { "If-Match": String(row._version) },
+        body: JSON.stringify({ process_enable: 0 }),
+      });
+      const fresh = await api("/api/rtus/" + encodeURIComponent(row.rtu_id));
+      await api("/api/rtus/" + encodeURIComponent(row.rtu_id), {
+        method: "PATCH",
+        headers: { "If-Match": String(fresh.item?._version ?? "") },
+        body: JSON.stringify({ process_enable: 1 }),
+      });
+      count += 1;
+    } catch (_) { /* 跳过单条失败 */ }
+  }
+  toast(`已重新触发 ${count} 个异常 RTU 的自动通信`);
+  loadScdfe();
+});
+
+$("#export-csv")?.addEventListener("click", () => {
+  const ctx = context();
+  if (pointKinds.includes(ctx.resource)) {
+    const qs = new URLSearchParams();
+    if (ctx.rtu) qs.set("rtu_id", ctx.rtu);
+    const searchVal = ($("#search")?.value || "").trim();
+    if (searchVal) qs.set("q", searchVal);
+    location.href = "/api/points/" + encodeURIComponent(ctx.resource) + "/csv" + (qs.toString() ? "?" + qs.toString() : "");
+    return;
+  }
+  const cols = visibleColumns();
+  if (!cols.length || !state.items.length) {
+    toast("当前无可导出记录", true);
+    return;
+  }
+  const csvCell = (val) => {
+    const raw = val == null ? "" : String(val);
+    const safe = raw && "=+-@\t\r".includes(raw[0]) ? "'" + raw : raw;
+    return '"' + safe.replace(/"/g, '""') + '"';
+  };
+  const lines = [
+    cols.map((c) => csvCell(c.eng_name)).join(","),
+    ...state.items.map((row) => cols.map((c) => csvCell(row[c.eng_name])).join(",")),
+  ];
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `scdfe_c-${state.resource}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+let csvImportContent = "";
+$("#import-points-csv")?.addEventListener("click", () => {
+  if (!pointKinds.includes(state.resource)) return;
+  csvImportContent = "";
+  const dlg = $("#csv-import-dialog");
+  if (!dlg) return;
+  $("#csv-import-title").textContent = `导入 ${state.resource.toUpperCase()} CSV 点表`;
+  $("#csv-import-file").value = "";
+  $("#csv-import-preview").hidden = true;
+  $("#csv-import-preview").textContent = "";
+  $("#csv-import-error").textContent = "";
+  dlg.showModal();
+});
+$("#close-csv-import")?.addEventListener("click", () => $("#csv-import-dialog")?.close());
+$("#cancel-csv-import")?.addEventListener("click", () => $("#csv-import-dialog")?.close());
+$("#csv-import-file")?.addEventListener("change", async (ev) => {
+  const f = ev.target.files?.[0];
+  csvImportContent = f ? await f.text() : "";
+  $("#csv-import-error").textContent = "";
+  $("#csv-import-preview").hidden = true;
+});
+
+async function runCsvImport(dryRun) {
+  const errEl = $("#csv-import-error");
+  const prevEl = $("#csv-import-preview");
+  errEl.textContent = "";
+  if (!csvImportContent.trim()) {
+    errEl.textContent = "请先选择 CSV 文件";
+    return;
+  }
+  const onConflict = $("#csv-import-conflict")?.value || "skip";
+  try {
+    const res = await api("/api/points/" + encodeURIComponent(state.resource) + "/csv", {
+      method: "POST",
+      body: JSON.stringify({
+        content: csvImportContent,
+        rtu_id: state.rtu || null,
+        dry_run: dryRun,
+        on_conflict: onConflict,
+      }),
+    });
+    const summary = dryRun
+      ? `预检完成：总计 ${res.total_rows} 行 · 将新增 ${res.would_create} · 将覆盖 ${res.would_update} · 跳过 ${res.skipped} · 冲突 ${res.conflict_count} · 错误 ${res.error_count}`
+      : `导入完成：新增 ${res.created} · 更新 ${res.updated} · 跳过 ${res.skipped}`;
+    if (res.error_count > 0) {
+      const firstErr = res.errors?.[0];
+      errEl.textContent = `发现 ${res.error_count} 条错误（例：第 ${firstErr?.line || "?"} 行 ${firstErr?.reason || ""}）`;
+    }
+    prevEl.textContent = summary;
+    prevEl.hidden = false;
+    if (!dryRun && res.error_count === 0) {
+      $("#csv-import-dialog")?.close();
+      toast(summary);
+      await loadRows({ fresh: true });
+      await refreshSummary();
+    }
+  } catch (err) {
+    errEl.textContent = err.message;
+  }
+}
+$("#preview-csv-import")?.addEventListener("click", () => runCsvImport(true));
+$("#csv-import-form")?.addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  runCsvImport(false);
+});
+
+const REFRESH_STORAGE_KEY = "scada_c_refresh_ms";
+let autoRefreshTimer = null;
+function runAutoRefreshTick() {
+  if (document.hidden || document.querySelector("dialog[open]") || state.saving) return;
   if (state.resource === "logs") {
     if (!logs.loading && !logs.contentLoading) loadScdfeLogs(false);
     return;
   }
-  if (!$("#auto-refresh").checked) return;
+  if (!$("#auto-refresh")?.checked) return;
   if (state.resource === "processes") {
     if (!processMonitor.loading) loadProcesses();
   } else if (state.resource === "scdfe") {
     if (!monitor.loading) loadScdfe();
   } else if (!state.loading) loadRows();
-}, 5000);
+}
+function configureAutoRefresh(ms, persist = true) {
+  const val = [0, 1000, 2000, 5000, 10000].includes(Number(ms)) ? Number(ms) : 5000;
+  const sel = $("#auto-refresh-interval");
+  const cb = $("#auto-refresh");
+  if (sel) sel.value = String(val);
+  if (cb) cb.checked = val > 0;
+  if (persist) {
+    try { localStorage.setItem(REFRESH_STORAGE_KEY, String(val)); } catch (_) { /* ignore */ }
+  }
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+  autoRefreshTimer = setInterval(runAutoRefreshTick, val > 0 ? val : 5000);
+}
+$("#auto-refresh-interval")?.addEventListener("change", (ev) => {
+  configureAutoRefresh(Number(ev.target.value), true);
+});
+try {
+  const savedMs = localStorage.getItem(REFRESH_STORAGE_KEY);
+  configureAutoRefresh(savedMs !== null ? Number(savedMs) : 5000, false);
+} catch (_) {
+  configureAutoRefresh(5000, false);
+}
+// 从 URL Query 恢复筛选/排序/视图上下文（刷新不丢现场）
+try {
+  const initParams = new URLSearchParams(location.search);
+  const initQ = initParams.get("q");
+  if (initQ && $("#search")) $("#search").value = initQ;
+  const initView = initParams.get("view");
+  if (["common", "live", "all"].includes(initView)) state.view = initView;
+  const initSort = initParams.get("sort");
+  if (initSort) {
+    state.sort = initSort;
+    state.order = initParams.get("order") === "desc" ? "desc" : "asc";
+  }
+  const initOffset = Number(initParams.get("offset") || "0");
+  if (Number.isInteger(initOffset) && initOffset > 0) state.offset = initOffset;
+} catch (_) { /* ignore */ }
 boot();

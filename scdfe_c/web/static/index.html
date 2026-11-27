@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="zh-CN" data-theme="minimalist-light">
   <head>
+    <script src="/static/theme-init.js"></script>
     <script src="/static/audit-client.js"></script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -9,6 +10,7 @@
     <link rel="stylesheet" href="/static/log-browser.css" />
     <link rel="stylesheet" href="/static/point-trend.css" />
     <link rel="stylesheet" href="/static/ui-theme.css" />
+    <script defer src="/static/table-reconcile.js"></script>
     <script defer src="/static/ui-i18n.js"></script>
     <script defer src="/static/workbench.js"></script>
     <script defer src="/static/layout-resizer.js"></script>
@@ -21,8 +23,14 @@
       </div>
       <div class="header-tools">
         <span id="last-updated">等待更新</span
-        ><label class="refresh-toggle"
-          ><input type="checkbox" id="auto-refresh" checked /> 5 秒刷新</label
+        ><label class="refresh-toggle" title="切换自动刷新频率"
+          ><input type="checkbox" id="auto-refresh" checked hidden /><select id="auto-refresh-interval" aria-label="自动刷新频率">
+            <option value="1000">1s 刷新</option>
+            <option value="2000">2s 刷新</option>
+            <option value="5000" selected>5s 刷新</option>
+            <option value="10000">10s 刷新</option>
+            <option value="0">已暂停</option>
+          </select></label
         >
         <div class="health" id="health">
           <span class="dot"></span><span>连接检查中</span>
@@ -92,6 +100,10 @@
               </div>
               <div class="actions">
                 <button class="button secondary" id="refresh">刷新</button
+                ><button class="button secondary" id="export-csv" type="button">
+                  导出 CSV</button
+                ><button class="button secondary" id="import-points-csv" type="button" hidden>
+                  导入 CSV</button
                 ><button class="button secondary" id="import-efile" type="button">
                   导入 E 文件</button
                 ><button class="button primary" id="add" disabled>
@@ -210,7 +222,10 @@
               <option value="5">错误</option>
               <option value="0">停止</option>
               <option value="disabled">退出自动通信</option></select
-            ><span id="thread-count" class="muted"></span>
+            ><button type="button" class="row-button" id="thread-errors-only">仅看异常</button
+            ><button type="button" class="row-button" id="thread-retry-errors" hidden>重置异常线程</button
+            ><span id="scdfe-sparkline" class="scada-sparkline" title="近 24 次采样总吞吐速率"></span>
+            <span id="thread-count" class="muted"></span>
           </div>
           <div class="table-wrap thread-table">
             <table>
@@ -499,6 +514,34 @@
           <span id="batch-scale-error" class="form-error" role="alert"></span>
           <button class="button secondary" type="button" id="cancel-batch-scale">取消</button>
           <button class="button primary" type="submit" id="submit-batch-scale">应用到已选测点</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="csv-import-dialog" class="config-dialog" aria-labelledby="csv-import-title">
+      <form id="csv-import-form" class="config-dialog-form">
+        <div class="dialog-head">
+          <h2 id="csv-import-title">导入四遥 CSV 点表</h2>
+          <button type="button" class="icon-button" id="close-csv-import" aria-label="关闭">×</button>
+        </div>
+        <div class="efile-import-fields">
+          <label class="field">
+            <span>选择 CSV 文件（支持预检冲突）</span>
+            <input id="csv-import-file" type="file" accept=".csv,text/csv" required />
+          </label>
+          <label class="field">
+            <span>冲突策略</span>
+            <select id="csv-import-conflict" aria-label="CSV 冲突策略">
+              <option value="skip" selected>跳过已存在测点</option>
+              <option value="overwrite">覆盖已存在测点参数</option>
+            </select>
+          </label>
+          <div id="csv-import-preview" class="efile-import-meta" hidden></div>
+        </div>
+        <div class="dialog-foot">
+          <span id="csv-import-error" class="form-error" role="alert"></span>
+          <button class="button secondary" type="button" id="cancel-csv-import">取消</button>
+          <button class="button secondary" type="button" id="preview-csv-import">预检冲突</button>
+          <button class="button primary" type="submit" id="submit-csv-import">确认导入</button>
         </div>
       </form>
     </dialog>
