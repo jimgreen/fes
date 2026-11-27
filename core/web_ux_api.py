@@ -1017,11 +1017,16 @@ def read_dashboard_overview(store, component: str) -> dict:
                 except sqlite3.Error:
                     pass
 
-            # 2. 重点 YC 实时工程值快照（取绝对值/活跃靠前的 Top 10）
+            # 2. 重点 YC 实时工程值快照（取绝对值/活跃靠前的 Top 10，含更新时间与可选单位）
             if "fes_yc_define" in tables:
                 try:
+                    yc_cols = {
+                        str(r[1]).lower()
+                        for r in con.execute("PRAGMA table_info(fes_yc_define)").fetchall()
+                    }
+                    unit_expr = "unit" if "unit" in yc_cols else "'' AS unit"
                     yc_rows = con.execute(
-                        "SELECT rtu_id, pnt_no, name, value, status, refresh_time FROM fes_yc_define "
+                        f"SELECT rtu_id, pnt_no, name, value, status, refresh_time, {unit_expr} FROM fes_yc_define "
                         "WHERE value IS NOT NULL "
                         "ORDER BY COALESCE(refresh_time, 0) DESC, ABS(CAST(value AS REAL)) DESC, rtu_id ASC, pnt_no ASC LIMIT 10"
                     ).fetchall()
@@ -1035,7 +1040,9 @@ def read_dashboard_overview(store, component: str) -> dict:
                             "pnt_no": yr["pnt_no"],
                             "name": yr["name"] or f"YC#{yr['pnt_no']}",
                             "value": round(fval, 4),
+                            "unit": str(yr["unit"] or "").strip(),
                             "status": int(yr["status"] or 0),
+                            "refresh_time": int(yr["refresh_time"] or 0),
                         })
                 except sqlite3.Error:
                     pass
@@ -1339,6 +1346,7 @@ def read_dashboard_overview(store, component: str) -> dict:
 
     return {
         "component": component,
+        "source_db": Path(store.db_path).name if getattr(store, "db_path", None) else "",
         "timestamp_ms": now_ms,
         "health_score": score,
         "kpis": {
@@ -1394,6 +1402,7 @@ class _ReadOnlyDbStore:
 def _empty_dashboard_snapshot(role: str, now_ms: int) -> dict:
     return {
         "component": role,
+        "source_db": "",
         "timestamp_ms": now_ms,
         "health_score": 100,
         "kpis": {
@@ -1483,6 +1492,7 @@ def read_dashboard_all(handler, store, component: str) -> dict:
 
     return {
         "component": component,
+        "source_db": Path(store.db_path).name if getattr(store, "db_path", None) else "",
         "timestamp_ms": now_ms,
         "overall_score": overall_score,
         "services": services,

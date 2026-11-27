@@ -230,18 +230,9 @@
   }
 
   // ==================== 4. 三端顶栏快捷互跳（C | S | T）与运维权限状态 ====================
-  function buildSiblingUrl(baseUrl, targetKey) {
-    const ctx = readFocus();
+  function buildSiblingUrl(baseUrl) {
     const u = new URL(baseUrl);
-    if (targetKey === "c") {
-      if (ctx.rtu_id) u.searchParams.set("rtu_id", ctx.rtu_id);
-    } else if (targetKey === "s") {
-      u.pathname = "/test";
-      if (ctx.rtu_id) u.searchParams.set("rtu_id", ctx.rtu_id);
-    } else if (targetKey === "t") {
-      u.pathname = "/communication";
-      if (ctx.channel_id) u.searchParams.set("channel_id", ctx.channel_id);
-    }
+    u.pathname = "/dashboard";
     return u.toString();
   }
 
@@ -338,21 +329,20 @@
       nav.id = "ui-sibling-nav";
       nav.className = "ui-sibling-nav";
       nav.setAttribute("aria-label", "三端系统快捷切换");
+      const onOwnDashboard = location.pathname === "/dashboard" || location.pathname === "/dashboard.html";
       links.forEach((item) => {
+        const targetUrl = buildSiblingUrl(item.url, item.key);
         const a = document.createElement("a");
         a.className = "ui-sibling-link" + (item.active ? " is-active" : "");
         a.textContent = item.label;
-        a.href = item.active ? "#" : item.url;
-        if (item.active) {
-          a.setAttribute("aria-current", "true");
-          a.onclick = (e) => e.preventDefault();
-        } else {
-          a.onclick = (e) => {
-            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
-            e.preventDefault();
-            location.href = buildSiblingUrl(item.url, item.key);
-          };
-        }
+        a.href = targetUrl;
+        if (item.active) a.setAttribute("aria-current", "true");
+        a.onclick = (e) => {
+          if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          if (item.active && onOwnDashboard) return;
+          location.href = targetUrl;
+        };
         nav.appendChild(a);
       });
       brand.insertAdjacentElement("afterend", nav);

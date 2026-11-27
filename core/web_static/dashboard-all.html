@@ -64,13 +64,18 @@
           <!-- 左柱：仿真端 scdfe_s -->
           <article class="dash-card">
             <div class="dash-card-head">
-              <h2>仿真端 scdfe_s · 示波与点阵</h2>
-              <a class="dash-card-link" id="dash-all-link-s" href="/dashboard">仿真大屏 ↗</a>
+              <h2>仿真端 scdfe_s · 遥测与遥信</h2>
+              <div class="dash-head-right">
+                <span class="dash-source-badge" id="dash-scope-source">—</span>
+                <a class="dash-card-link" id="dash-all-link-s" href="/dashboard">仿真大屏 ↗</a>
+              </div>
             </div>
             <div class="dash-card-body dash-all-col-body">
               <div class="dash-canvas-wrap dash-all-mini-canvas">
                 <canvas id="dash-scope-canvas" class="dash-canvas"></canvas>
+                <div id="dash-scope-tip" class="dash-tooltip" hidden></div>
               </div>
+              <div class="dash-scope-readout dash-all-scope-readout" id="dash-scope-readout"></div>
               <div class="dash-all-sub-block" id="dash-all-s-summary"></div>
             </div>
           </article>
@@ -79,7 +84,10 @@
           <article class="dash-card">
             <div class="dash-card-head">
               <h2>采集端 scdfe_c · 吞吐与四遥</h2>
-              <a class="dash-card-link" id="dash-all-link-c" href="/dashboard">采集大屏 ↗</a>
+              <div class="dash-head-right">
+                <span class="dash-source-badge" id="dash-all-c-source">—</span>
+                <a class="dash-card-link" id="dash-all-link-c" href="/dashboard">采集大屏 ↗</a>
+              </div>
             </div>
             <div class="dash-card-body dash-all-col-body">
               <div class="dash-canvas-wrap dash-all-mini-canvas">

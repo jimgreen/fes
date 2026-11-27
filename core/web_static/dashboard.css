@@ -284,12 +284,7 @@ body.dash-fullscreen .workbench-content {
   max-height: 196px;
 }
 .dash-gauge-orbit {
-  transform-origin: center;
-  animation: dashOrbitSpin 28s linear infinite;
-}
-@keyframes dashOrbitSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  opacity: 0.65;
 }
 .dash-gauge-arc {
   transition: stroke-dashoffset 0.7s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.35s ease;
@@ -341,18 +336,21 @@ body.dash-fullscreen .workbench-content {
   fill: none;
   stroke-width: 1.75;
   stroke-linecap: round;
-  opacity: 0.38;
+  opacity: 0.42;
+}
+.dash-flow-idle {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 4 5;
+  opacity: 0.48;
 }
 .dash-flow-pulse {
   fill: none;
   stroke-width: 2.4;
   stroke-linecap: round;
   stroke-dasharray: 8 18;
-  animation: dashFlowMove 1.6s linear infinite;
-}
-.dash-flow-pulse.is-slow {
-  animation-duration: 3.2s;
-  opacity: 0.55;
+  animation: dashFlowMove 1.8s linear infinite;
 }
 @keyframes dashFlowMove {
   from { stroke-dashoffset: 52; }
@@ -366,13 +364,22 @@ body.dash-fullscreen .workbench-content {
   filter: brightness(1.08);
 }
 .dash-hub-ring {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: dashHubBreath 3s ease-in-out infinite;
+  opacity: 0.55;
 }
-@keyframes dashHubBreath {
-  0%, 100% { opacity: 0.32; transform: scale(1); }
-  50% { opacity: 0.72; transform: scale(1.05); }
+.dash-source-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid color-mix(in srgb, var(--border-color) 75%, transparent);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
 }
 
 /* ==================== 3 & 4. Canvas 曲线 & 柱状图 ==================== */
@@ -859,7 +866,7 @@ body.dash-fullscreen .workbench-content {
   font-family: var(--font-mono);
 }
 
-/* S 端下右：客户端雷达扫描 + 会话流 */
+/* S 端下右：客户端会话统计环图 + 会话流 */
 .dash-radar-panel {
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr);
@@ -878,14 +885,18 @@ body.dash-fullscreen .workbench-content {
   width: 106px;
   height: 106px;
 }
-.dash-radar-sweep {
-  transform-origin: 55px 55px;
-  animation: dashOrbitSpin 4.5s linear infinite;
-}
 .dash-radar-caption {
   font-size: 10.5px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
+}
+.dash-all-scope-readout {
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.dash-all-scope-readout .dash-scope-chip {
+  font-size: 10px;
+  padding: 1px 5px;
 }
 
 /* T 端：上宽幅桑基枢纽+双半圆仪 / 下三栏对账调度 */

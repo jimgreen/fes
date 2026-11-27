@@ -70,10 +70,8 @@
     abort: null,
     hbarTab: document.body?.dataset?.dashRole === "s" ? "led" : "primary",
     tLeftTab: "bars",
-    scopeMode: document.body?.dataset?.dashRole === "all" ? "wave" : "sync",
-    scopePhase: 0,
-    scopeAnimFrame: 0,
     scopeHistory: [],
+    scopeHoverIdx: -1,
     trendHistory: [],
     prevTotals: null,
     barHitboxes: [],
@@ -358,13 +356,20 @@
     const lines = [];
     const nodes = [];
 
+    const k = data.kpis || {};
+    const anyRunning = Number(k.channels_running || 0) > 0;
+
     leftNodes.forEach((n, i) => {
       const y = posY(i, leftNodes.length);
       const cy = y + nodeH / 2;
       const col = stateColor(n.state);
       const d = `M ${leftX + nodeW} ${cy} C ${leftX + nodeW + 42} ${cy}, ${hubX - 72} ${hubY}, ${hubX - 44} ${hubY}`;
-      lines.push(`<path class="dash-flow-line" d="${d}" stroke="${col}"></path>`);
-      lines.push(`<path class="dash-flow-pulse${n.state !== "running" ? " is-slow" : ""}" d="${d}" stroke="${col}"></path>`);
+      if (n.state === "running") {
+        lines.push(`<path class="dash-flow-line" d="${d}" stroke="${col}"></path>`);
+        lines.push(`<path class="dash-flow-pulse" d="${d}" stroke="${col}"></path>`);
+      } else {
+        lines.push(`<path class="${n.state === "error" ? "dash-flow-line" : "dash-flow-idle"}" d="${d}" stroke="${col}"></path>`);
+      }
       nodes.push(`
         <g class="dash-node-box" data-nav-href="${esc(n.href)}" data-nav-rtu="${esc(n.rtuId ?? "")}">
           <rect x="${leftX}" y="${y}" width="${nodeW}" height="${nodeH}" rx="8" fill="${pal.bgSubtle}" stroke="${col}" stroke-width="1.35"></rect>
@@ -378,9 +383,14 @@
       const y = posY(i, rightNodes.length);
       const cy = y + nodeH / 2;
       const col = n.state ? stateColor(n.state) : pal.accent;
+      const activeFlow = n.state ? n.state === "running" : anyRunning;
       const d = `M ${hubX + 44} ${hubY} C ${hubX + 72} ${hubY}, ${rightX - 42} ${cy}, ${rightX} ${cy}`;
-      lines.push(`<path class="dash-flow-line" d="${d}" stroke="${col}"></path>`);
-      lines.push(`<path class="dash-flow-pulse${n.state && n.state !== "running" ? " is-slow" : ""}" d="${d}" stroke="${col}"></path>`);
+      if (activeFlow) {
+        lines.push(`<path class="dash-flow-line" d="${d}" stroke="${col}"></path>`);
+        lines.push(`<path class="dash-flow-pulse" d="${d}" stroke="${col}"></path>`);
+      } else {
+        lines.push(`<path class="dash-flow-idle" d="${d}" stroke="${col}"></path>`);
+      }
       nodes.push(`
         <g class="dash-node-box" data-nav-href="${esc(n.href)}">
           <rect x="${rightX}" y="${y}" width="${nodeW}" height="${nodeH}" rx="8" fill="${pal.bgSubtle}" stroke="${col}" stroke-width="1.35"></rect>
@@ -390,8 +400,8 @@
         </g>`);
     });
 
-    const k = data.kpis || {};
-    $("dash-topo-meta").textContent = `${k.channels_running}/${k.channels_total} ${tr("运行中")} · ${(data.protocols || []).length} ${tr("规约")}`;
+    const dbTag = data.source_db ? `${data.source_db} · ` : "";
+    $("dash-topo-meta").textContent = `${dbTag}${k.channels_running}/${k.channels_total} ${tr("运行中")} · ${(data.protocols || []).length} ${tr("规约")}`;
 
     host.innerHTML = `
       <svg class="dash-topo-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
@@ -415,7 +425,7 @@
     });
   }
 
-  // ==================== 4. 实时平滑双曲线趋势图（Canvas） ====================
+  // ==================== 4. 实时真实收发增量双曲线（Canvas，严格无虚构基线） ====================
   function pushTrendPoint(data) {
     const k = data.kpis || {};
     const now = Date.now();
@@ -427,28 +437,17 @@
       const dt = Math.max(0.5, (now - state.prevTotals.ts) / 1000);
       rxRate = Math.max(0, (rx - state.prevTotals.rx) / dt);
       txRate = Math.max(0, (tx - state.prevTotals.tx) / dt);
-    } else if (state.trendHistory.length === 0) {
-      // 首屏预置 6 个历史基线点避免单点孤立，后续全部为真实相邻采样增量速率
-      const activeScale = Math.max(0, Number(k.channels_running || 0));
-      const baseRx = rx > 0 ? Math.min(20, activeScale * 0.5) : 0;
-      const baseTx = tx > 0 ? Math.min(20, activeScale * 0.3) : 0;
-      for (let i = 5; i >= 1; i--) {
-        const ts = now - i * state.intervalMs;
-        state.trendHistory.push({
-          label: new Date(ts).toTimeString().slice(0, 8),
-          rx: Number(baseRx.toFixed(2)),
-          tx: Number(baseTx.toFixed(2)),
-          rxTotal: rx,
-          txTotal: tx,
-        });
-      }
-      rxRate = baseRx;
-      txRate = baseTx;
     }
     state.prevTotals = { rx, tx, ts: now };
     const tStr = new Date(now).toTimeString().slice(0, 8);
-    state.trendHistory.push({ label: tStr, rx: Number(rxRate.toFixed(2)), tx: Number(txRate.toFixed(2)), rxTotal: rx, txTotal: tx });
-    if (state.trendHistory.length > 24) state.trendHistory.shift();
+    state.trendHistory.push({
+      label: tStr,
+      rx: Number(rxRate.toFixed(2)),
+      tx: Number(txRate.toFixed(2)),
+      rxTotal: rx,
+      txTotal: tx,
+    });
+    if (state.trendHistory.length > 30) state.trendHistory.shift();
   }
 
   function drawTrendCanvas() {
@@ -465,12 +464,14 @@
     const H = rect.height;
     const pal = getPalette();
 
+    const lastPt = state.trendHistory[state.trendHistory.length - 1];
     const s1Label = state.component === "t" ? tr("源读入/s") : tr("接收帧/s");
     const s2Label = state.component === "t" ? tr("转发上送/s") : tr("发送帧/s");
     if ($("dash-trend-legend")) {
+      const totHint = lastPt ? ` · ${tr("累计")} ${fmtCompact(lastPt.rxTotal)}/${fmtCompact(lastPt.txTotal)}` : "";
       $("dash-trend-legend").innerHTML =
         `<span class="dash-legend-item"><i class="dash-legend-swatch is-s0"></i>${esc(s1Label)}</span>` +
-        `<span class="dash-legend-item"><i class="dash-legend-swatch is-s1"></i>${esc(s2Label)}</span>`;
+        `<span class="dash-legend-item"><i class="dash-legend-swatch is-s1"></i>${esc(s2Label)}${esc(totHint)}</span>`;
     }
 
     const pad = { top: 14, right: 26, bottom: 22, left: 36 };
@@ -517,37 +518,45 @@
 
     const drawSeries = (key, color, withArea) => {
       const coords = pts.map((p, i) => [xOf(i), yOf(p[key])]);
-      ctx.beginPath();
-      coords.forEach(([x, y], i) => {
-        if (i === 0) ctx.moveTo(x, y);
-        else {
-          const [px, py] = coords[i - 1];
-          const cx = (px + x) / 2;
-          ctx.bezierCurveTo(cx, py, cx, y, x, y);
-        }
-      });
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      if (coords.length === 1) {
+        const [x0, y0] = coords[0];
+        ctx.strokeStyle = hexToRgba(color, 0.45);
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y0);
+        ctx.lineTo(x0, y0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.beginPath();
+        coords.forEach(([x, y], i) => {
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-      if (withArea && coords.length > 1) {
-        const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
-        grad.addColorStop(0, hexToRgba(color, 0.16));
-        grad.addColorStop(1, hexToRgba(color, 0.0));
-        ctx.lineTo(coords[coords.length - 1][0], pad.top + plotH);
-        ctx.lineTo(coords[0][0], pad.top + plotH);
-        ctx.closePath();
-        ctx.fillStyle = grad;
-        ctx.fill();
+        if (withArea) {
+          const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + plotH);
+          grad.addColorStop(0, hexToRgba(color, 0.16));
+          grad.addColorStop(1, hexToRgba(color, 0.0));
+          ctx.lineTo(coords[coords.length - 1][0], pad.top + plotH);
+          ctx.lineTo(coords[0][0], pad.top + plotH);
+          ctx.closePath();
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
       }
-      // 尾端脉冲光点
+      // 尾端最新采样点标记
       const [lx, ly] = coords[coords.length - 1];
       ctx.beginPath();
-      ctx.arc(lx, ly, 5, 0, Math.PI * 2);
-      ctx.fillStyle = hexToRgba(color, 0.25);
+      ctx.arc(lx, ly, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(color, 0.24);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(lx, ly, 2.8, 0, Math.PI * 2);
+      ctx.arc(lx, ly, 2.6, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
     };
@@ -987,17 +996,34 @@
       .join("");
   }
 
-  // ==================== 9. S 端专属：多通道示波器 + 服务矩阵 + 客户端雷达 ====================
+  // ==================== 9. S 端专属：重点遥测真实采样趋势 + 服务矩阵 + 会话统计环 ====================
+  function fmtMeasureVal(val) {
+    const v = Number(val);
+    if (!Number.isFinite(v)) return "0";
+    if (Math.abs(v) >= 10000) return v.toFixed(1);
+    if (Math.abs(v) >= 100) return v.toFixed(2);
+    return Number.isInteger(v) ? String(v) : v.toFixed(2);
+  }
+
   function pushScopeSample(data) {
     if (!$("dash-scope-canvas")) return;
     const ycs = (data.top_yc || []).slice(0, 3);
-    const sample = [0, 1, 2].map((i) => Number(ycs[i]?.value ?? 0));
-    if (!state.scopeHistory.length) {
-      for (let k = 0; k < 48; k++) state.scopeHistory.push(sample.slice());
-    } else {
-      state.scopeHistory.push(sample);
-      if (state.scopeHistory.length > 60) state.scopeHistory.shift();
-    }
+    if (!ycs.length) return;
+    const now = Date.now();
+    const label = new Date(now).toTimeString().slice(0, 8);
+    state.scopeHistory.push({
+      ts: now,
+      label,
+      values: ycs.map((pt) => Number(pt.value ?? 0)),
+      points: ycs.map((pt) => ({
+        rtu_id: pt.rtu_id,
+        pnt_no: pt.pnt_no,
+        name: pt.name || `YC#${pt.pnt_no}`,
+        unit: pt.unit || "",
+        refresh_time: pt.refresh_time || 0,
+      })),
+    });
+    if (state.scopeHistory.length > 30) state.scopeHistory.shift();
   }
 
   function drawScopeCanvas() {
@@ -1015,113 +1041,150 @@
     const pal = getPalette();
 
     const ycs = (state.data.top_yc || []).slice(0, 3);
-    const chLabels = [0, 1, 2].map((i) => ycs[i]?.name || `CH${i + 1}`);
+    const srcDb = state.data.source_db || "scdfe_s.db";
+    if ($("dash-scope-source")) {
+      $("dash-scope-source").textContent = `${srcDb} · fes_yc_define`;
+      $("dash-scope-source").title = `数据源：${srcDb} 表 fes_yc_define 实测工程值`;
+    }
     if ($("dash-scope-legend")) {
-      $("dash-scope-legend").innerHTML = chLabels
-        .map((n, i) => `<span class="dash-legend-item"><i class="dash-legend-swatch is-s${i}"></i>${esc(n.slice(0, 10))}</span>`)
+      $("dash-scope-legend").innerHTML = ycs
+        .map((pt, i) => `<span class="dash-legend-item" title="RTU ${esc(pt.rtu_id)} #${esc(pt.pnt_no)} ${esc(pt.name)}"><i class="dash-legend-swatch is-s${i}"></i>R${esc(pt.rtu_id)}#${esc(pt.pnt_no)} ${esc(String(pt.name || "").slice(0, 8))}</span>`)
         .join("");
     }
     if ($("dash-scope-readout")) {
-      $("dash-scope-readout").innerHTML = [0, 1, 2]
-        .map((i) => {
-          const pt = ycs[i];
-          const val = pt ? Number(pt.value || 0).toFixed(2) : "0.00";
-          return `<span class="dash-scope-chip"><i class="dash-legend-swatch is-s${i}"></i>${esc(chLabels[i].slice(0, 12))} <b>${val}</b></span>`;
-        })
-        .join("");
+      $("dash-scope-readout").innerHTML = ycs.length
+        ? ycs
+            .map((pt, i) => {
+              const valStr = fmtMeasureVal(pt.value) + (pt.unit ? ` ${pt.unit}` : "");
+              const rtHint = pt.refresh_time ? ` · 更新 ${new Date(pt.refresh_time).toTimeString().slice(0, 8)}` : "";
+              return `<span class="dash-scope-chip" title="${esc(srcDb)} · fes_yc_define · RTU ${esc(pt.rtu_id)} #${esc(pt.pnt_no)} ${esc(pt.name)}${esc(rtHint)}"><i class="dash-legend-swatch is-s${i}"></i>R${esc(pt.rtu_id)}#${esc(pt.pnt_no)} ${esc(String(pt.name || "").slice(0, 10))} <b>${esc(valStr)}</b></span>`;
+            })
+            .join("")
+        : `<span class="dash-scope-chip">${esc(tr("暂无遥测测点"))} (${esc(srcDb)} · fes_yc_define)</span>`;
     }
 
     ctx.clearRect(0, 0, W, H);
-    const pad = { top: 10, right: 14, bottom: 14, left: 14 };
+    const hist = state.scopeHistory;
+    if (!ycs.length || !hist.length) {
+      ctx.fillStyle = pal.textMuted;
+      ctx.font = "11.5px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${tr("暂无实测遥测数据")} (${srcDb} · fes_yc_define)`, W / 2, H / 2);
+      return;
+    }
+
+    const pad = { top: 12, right: 22, bottom: 20, left: 48 };
     const pw = Math.max(20, W - pad.left - pad.right);
     const ph = Math.max(20, H - pad.top - pad.bottom);
 
-    // 精密示波器网格（8x4）
-    ctx.strokeStyle = hexToRgba(pal.textMuted, pal.dark ? 0.16 : 0.22);
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= 8; x++) {
-      const gx = pad.left + (pw * x) / 8;
-      ctx.beginPath();
-      ctx.moveTo(gx, pad.top);
-      ctx.lineTo(gx, pad.top + ph);
-      ctx.stroke();
+    // 根据真实采样的工程值计算物理 Y 轴量程（恒定值围绕实测值上下各留 5% 边距，零虚构波形）
+    const allVals = [];
+    hist.forEach((h) => h.values.forEach((v) => { if (Number.isFinite(v)) allVals.push(v); }));
+    let minV = Math.min(...allVals);
+    let maxV = Math.max(...allVals);
+    if (!Number.isFinite(minV) || !Number.isFinite(maxV)) {
+      minV = 0;
+      maxV = 100;
+    } else if (Math.abs(maxV - minV) < 1e-6) {
+      const span = Math.max(1, Math.abs(minV) * 0.05);
+      minV -= span;
+      maxV += span;
+    } else {
+      const margin = (maxV - minV) * 0.15;
+      minV -= margin;
+      maxV += margin;
     }
-    for (let y = 0; y <= 4; y++) {
-      const gy = pad.top + (ph * y) / 4;
+
+    // 水平虚线网格 + 真实物理量程刻度
+    ctx.font = "10px var(--font-mono), Consolas, monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for (let i = 0; i <= 4; i++) {
+      const gy = pad.top + (ph * i) / 4;
+      const tickVal = maxV - ((maxV - minV) * i) / 4;
+      ctx.strokeStyle = hexToRgba(pal.textMuted, pal.dark ? 0.16 : 0.24);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
       ctx.beginPath();
       ctx.moveTo(pad.left, gy);
       ctx.lineTo(pad.left + pw, gy);
       ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = pal.textMuted;
+      ctx.fillText(fmtMeasureVal(tickVal), pad.left - 5, gy);
     }
 
-    // 中央水平基准线
-    ctx.strokeStyle = hexToRgba(pal.accent, 0.3);
-    ctx.beginPath();
-    ctx.moveTo(pad.left, pad.top + ph / 2);
-    ctx.lineTo(pad.left + pw, pad.top + ph / 2);
-    ctx.stroke();
+    const xOf = (idx) => pad.left + (hist.length <= 1 ? pw : (idx / (hist.length - 1)) * pw);
+    const yOf = (val) => pad.top + ph - ((val - minV) / Math.max(1e-6, maxV - minV)) * ph;
 
-    const N = 72;
-    const hist = state.scopeHistory;
-    const maxAbs = Math.max(1, ...hist.flat().map((v) => Math.abs(v)));
-    const phase = state.scopePhase;
+    // X 轴真实采样时刻刻度
+    ctx.textBaseline = "top";
+    ctx.fillStyle = pal.textMuted;
+    const tickIndices = hist.length <= 3
+      ? hist.map((_, i) => i)
+      : [0, Math.floor((hist.length - 1) / 2), hist.length - 1];
+    tickIndices.forEach((idx, pos) => {
+      ctx.textAlign = pos === 0 ? "left" : pos === tickIndices.length - 1 ? "right" : "center";
+      ctx.fillText(hist[idx].label, xOf(idx), H - pad.bottom + 4);
+    });
 
-    [0, 1, 2].forEach((chIdx) => {
+    const seriesCount = Math.min(3, ycs.length);
+    for (let chIdx = 0; chIdx < seriesCount; chIdx++) {
       const col = pal.series[chIdx];
-      const baseVal = Number(ycs[chIdx]?.value ?? 0);
-      const normBase = Math.max(-0.75, Math.min(0.75, baseVal / (maxAbs * 1.25)));
-      ctx.beginPath();
-      let lastX = pad.left;
-      let lastY = pad.top + ph / 2;
-      for (let i = 0; i < N; i++) {
-        const t = i / (N - 1);
-        const x = pad.left + t * pw;
-        let yNorm;
-        if (state.scopeMode === "wave") {
-          const freq = 1.6 + chIdx * 0.7;
-          yNorm = Math.sin(t * Math.PI * 2 * freq - phase * (1 + chIdx * 0.25)) * (0.58 - chIdx * 0.12) + normBase * 0.25;
-        } else {
-          const hIdx = Math.min(hist.length - 1, Math.floor(t * Math.max(1, hist.length - 1)));
-          const sampleVal = hist[hIdx]?.[chIdx] ?? baseVal;
-          const micro = Math.sin(t * Math.PI * 6 - phase + chIdx * 2.1) * 0.035;
-          yNorm = Math.max(-0.82, Math.min(0.82, sampleVal / (maxAbs * 1.2) + micro));
-        }
-        const y = pad.top + ph / 2 - yNorm * (ph * 0.44);
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-        lastX = x;
-        lastY = y;
+      const coords = hist.map((h, i) => [xOf(i), yOf(h.values[chIdx] ?? h.values[0] ?? 0)]);
+      if (coords.length === 1) {
+        const [x0, y0] = coords[0];
+        ctx.strokeStyle = hexToRgba(col, 0.55);
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y0);
+        ctx.lineTo(x0, y0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        ctx.beginPath();
+        coords.forEach(([x, y], i) => {
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.stroke();
       }
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
+      const [lx, ly] = coords[coords.length - 1];
       ctx.beginPath();
-      ctx.arc(lastX, lastY, 4.5, 0, Math.PI * 2);
-      ctx.fillStyle = hexToRgba(col, 0.28);
+      ctx.arc(lx, ly, 4.2, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(col, 0.25);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(lastX, lastY, 2.5, 0, Math.PI * 2);
+      ctx.arc(lx, ly, 2.4, 0, Math.PI * 2);
       ctx.fillStyle = col;
       ctx.fill();
-    });
-  }
+    }
 
-  function startScopeLoop() {
-    if (!$("dash-scope-canvas")) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
-    let last = performance.now();
-    const tick = (now) => {
-      state.scopeAnimFrame = requestAnimationFrame(tick);
-      if (document.hidden || !state.data) return;
-      if (now - last < 45) return;
-      const dt = (now - last) / 1000;
-      last = now;
-      state.scopePhase += dt * 1.8;
-      drawScopeCanvas();
-    };
-    cancelAnimationFrame(state.scopeAnimFrame);
-    state.scopeAnimFrame = requestAnimationFrame(tick);
+    // 悬停十字准星
+    if (state.scopeHoverIdx >= 0 && state.scopeHoverIdx < hist.length) {
+      const idx = state.scopeHoverIdx;
+      const hx = xOf(idx);
+      ctx.strokeStyle = hexToRgba(pal.accent, 0.55);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(hx, pad.top);
+      ctx.lineTo(hx, pad.top + ph);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (let chIdx = 0; chIdx < seriesCount; chIdx++) {
+        const val = hist[idx].values[chIdx];
+        if (!Number.isFinite(val)) continue;
+        ctx.beginPath();
+        ctx.arc(hx, yOf(val), 3.8, 0, Math.PI * 2);
+        ctx.fillStyle = pal.series[chIdx];
+        ctx.fill();
+      }
+    }
   }
 
   function renderSimServiceMatrix(data) {
@@ -1159,27 +1222,29 @@
     if (!host) return;
     const pal = getPalette();
     const cls = data.clients || [];
+    const total = cls.length;
     const active = Number(data.kpis?.active_clients || 0);
-    const blips = cls.slice(0, 6).map((c, idx) => {
-      const ang = (idx * 62 + 25) * (Math.PI / 180);
-      const rad = c.state === "online" ? 22 + (idx % 3) * 9 : 41;
-      const bx = 55 + Math.cos(ang) * rad;
-      const by = 55 + Math.sin(ang) * rad;
-      const col = c.state === "online" ? pal.ok : pal.textMuted;
-      return `<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="3.2" fill="${col}"></circle>`;
-    });
+    const closed = Math.max(0, total - active);
+    const totalFrames = cls.reduce((acc, c) => acc + Number(c.rx || 0) + Number(c.tx || 0), 0);
+    const r = 38;
+    const circ = 2 * Math.PI * r;
+    const activeLen = total > 0 ? (active / total) * circ : 0;
+    const closedLen = total > 0 ? (closed / total) * circ : 0;
     host.innerHTML =
-      `<svg class="dash-radar-svg" viewBox="0 0 110 110" aria-label="客户端雷达">` +
-      `<circle cx="55" cy="55" r="48" fill="${pal.bgSubtle}" stroke="${pal.border}" stroke-width="1"></circle>` +
-      `<circle cx="55" cy="55" r="32" fill="none" stroke="${pal.border}" stroke-dasharray="2 3"></circle>` +
-      `<circle cx="55" cy="55" r="16" fill="none" stroke="${pal.border}" stroke-dasharray="2 3"></circle>` +
-      `<line x1="7" y1="55" x2="103" y2="55" stroke="${pal.border}" stroke-width="0.8"></line>` +
-      `<line x1="55" y1="7" x2="55" y2="103" stroke="${pal.border}" stroke-width="0.8"></line>` +
-      `<path class="dash-radar-sweep" d="M 55 55 L 55 7 A 48 48 0 0 1 96 31 Z" fill="${hexToRgba(pal.ok, 0.2)}"></path>` +
-      blips.join("") +
-      `<circle cx="55" cy="55" r="3" fill="${pal.accent}"></circle>` +
+      `<svg class="dash-radar-svg" viewBox="0 0 110 110" aria-label="客户端会话统计 ${active}/${total}">` +
+      `<circle cx="55" cy="55" r="${r}" fill="none" stroke="${pal.bgSubtle}" stroke-width="11"></circle>` +
+      (closedLen > 0
+        ? `<circle cx="55" cy="55" r="${r}" fill="none" stroke="${hexToRgba(pal.textMuted, 0.45)}" stroke-width="11" ` +
+          `stroke-dasharray="${closedLen.toFixed(1)} ${(circ - closedLen).toFixed(1)}" stroke-dashoffset="${(-activeLen).toFixed(1)}" transform="rotate(-90 55 55)"></circle>`
+        : "") +
+      (activeLen > 0
+        ? `<circle class="dash-gauge-arc" cx="55" cy="55" r="${r}" fill="none" stroke="${pal.ok}" stroke-width="11" stroke-linecap="round" ` +
+          `stroke-dasharray="${activeLen.toFixed(1)} ${(circ - activeLen).toFixed(1)}" transform="rotate(-90 55 55)"></circle>`
+        : "") +
+      `<text x="55" y="53" text-anchor="middle" fill="${pal.text}" font-size="18" font-weight="700" font-family="var(--font-mono)">${active}/${total}</text>` +
+      `<text x="55" y="68" text-anchor="middle" fill="${pal.textSub}" font-size="9">${esc(tr("在线/历史"))}</text>` +
       `</svg>` +
-      `<span class="dash-radar-caption">${active} ${esc(tr("在线"))} / ${cls.length}</span>`;
+      `<span class="dash-radar-caption" title="数据源：connection_session">${fmtCompact(totalFrames)} ${esc(tr("交互帧"))}</span>`;
   }
 
   // ==================== 10. T 端专属：桑基流量枢纽 + 双半圆保真仪 + 绿盾护航 ====================
@@ -1207,23 +1272,25 @@
           title: `RTU ${r.rtu_id} ${r.name || ""}`.trim(),
           sub: `${(r.protocol || "—").toUpperCase()} · ${fmtCompact(r.points)}点`,
           weight: Math.max(1, r.points || 1),
+          state: r.state || "stopped",
           color: r.state === "error" ? pal.danger : r.state === "running" ? pal.ok : pal.accent,
           href: `/point-trace?rtu_id=${encodeURIComponent(r.rtu_id)}`,
           rtuId: r.rtu_id,
         }))
-      : [{ title: tr("源采集池"), sub: `${fmtCompact(k.points_total)}点`, weight: 1, color: pal.accent, href: "/point-trace", rtuId: null }];
+      : [{ title: tr("源采集池"), sub: `${fmtCompact(k.points_total)}点`, weight: 1, state: "stopped", color: pal.accent, href: "/point-trace", rtuId: null }];
 
     const rightList = targets.length
       ? targets.map((ch) => ({
           title: ch.name || `转发通道 ${ch.id}`,
           sub: `${(ch.protocol || "iec104").toUpperCase()}${ch.bind_port ? ":" + ch.bind_port : ""} · ${fmtCompact(ch.mapped)}点`,
           weight: Math.max(1, ch.mapped || 1),
+          state: ch.state || "stopped",
           color: ch.state === "error" ? pal.danger : ch.state === "running" ? pal.ok : pal.series[1],
           href: `/points?channel_id=${encodeURIComponent(ch.id)}`,
         }))
       : [
-          { title: tr("待建转发通道"), sub: tr("点击前往通道数据"), weight: 1, color: pal.accent, href: "/channels" },
-          { title: tr("全链路对账"), sub: `${fmtCompact(k.points_total)} ${tr("源测点")}`, weight: 1, color: pal.ok, href: "/point-trace" },
+          { title: tr("待建转发通道"), sub: tr("点击前往通道数据"), weight: 1, state: "stopped", color: pal.accent, href: "/channels" },
+          { title: tr("全链路对账"), sub: `${fmtCompact(k.points_total)} ${tr("源测点")}`, weight: 1, state: "stopped", color: pal.ok, href: "/point-trace" },
         ];
 
     const layoutCol = (arr) => {
@@ -1251,8 +1318,12 @@
       const ty = midY + ((i + 0.5) / L.length) * midH;
       const bw = Math.max(3, Math.min(14, n.h * 0.28));
       const d = `M ${leftX + boxW} ${n.cy} C ${leftX + boxW + 68} ${n.cy}, ${midX - 68} ${ty}, ${midX} ${ty}`;
-      ribbons.push(`<path d="${d}" fill="none" stroke="${hexToRgba(n.color, 0.24)}" stroke-width="${bw.toFixed(1)}" stroke-linecap="round"></path>`);
-      ribbons.push(`<path class="dash-flow-pulse" d="${d}" stroke="${n.color}"></path>`);
+      ribbons.push(`<path d="${d}" fill="none" stroke="${hexToRgba(n.color, 0.22)}" stroke-width="${bw.toFixed(1)}" stroke-linecap="round"></path>`);
+      if (n.state === "running") {
+        ribbons.push(`<path class="dash-flow-pulse" d="${d}" stroke="${n.color}"></path>`);
+      } else {
+        ribbons.push(`<path class="${n.state === "error" ? "dash-flow-line" : "dash-flow-idle"}" d="${d}" stroke="${n.color}"></path>`);
+      }
       boxes.push(`
         <g class="dash-node-box" data-nav-href="${esc(n.href)}" data-nav-rtu="${esc(n.rtuId ?? "")}">
           <rect x="${leftX}" y="${n.y.toFixed(1)}" width="${boxW}" height="${n.h.toFixed(1)}" rx="7" fill="${pal.bgSubtle}" stroke="${n.color}" stroke-width="1.3"></rect>
@@ -1265,8 +1336,12 @@
       const sy = midY + ((i + 0.5) / R.length) * midH;
       const bw = Math.max(3, Math.min(14, n.h * 0.28));
       const d = `M ${midX + midW} ${sy} C ${midX + midW + 68} ${sy}, ${rightX - 68} ${n.cy}, ${rightX} ${n.cy}`;
-      ribbons.push(`<path d="${d}" fill="none" stroke="${hexToRgba(n.color, 0.24)}" stroke-width="${bw.toFixed(1)}" stroke-linecap="round"></path>`);
-      ribbons.push(`<path class="dash-flow-pulse" d="${d}" stroke="${n.color}"></path>`);
+      ribbons.push(`<path d="${d}" fill="none" stroke="${hexToRgba(n.color, 0.22)}" stroke-width="${bw.toFixed(1)}" stroke-linecap="round"></path>`);
+      if (n.state === "running") {
+        ribbons.push(`<path class="dash-flow-pulse" d="${d}" stroke="${n.color}"></path>`);
+      } else {
+        ribbons.push(`<path class="${n.state === "error" ? "dash-flow-line" : "dash-flow-idle"}" d="${d}" stroke="${n.color}"></path>`);
+      }
       boxes.push(`
         <g class="dash-node-box" data-nav-href="${esc(n.href)}">
           <rect x="${rightX}" y="${n.y.toFixed(1)}" width="${boxW}" height="${n.h.toFixed(1)}" rx="7" fill="${pal.bgSubtle}" stroke="${n.color}" stroke-width="1.3"></rect>
@@ -1444,16 +1519,33 @@
       const back1 = `M 274 ${midY + 26} C ${274 - 24} ${midY + 34}, ${18 + cw + 24} ${midY + 34}, ${18 + cw} ${midY + 26}`;
       const back2 = `M 530 ${midY + 26} C ${530 - 24} ${midY + 34}, ${274 + cw + 24} ${midY + 34}, ${274 + cw} ${midY + 26}`;
 
+      const sToCActive = Number(sk.channels_running || 0) > 0 && Number(ck.channels_running || 0) > 0;
+      const cToTActive = Number(tk.channels_running || 0) > 0 && Number(tk.mapped_points || 0) > 0;
+      const sToCLabel = sToCActive
+        ? tr("采集链路")
+        : Number(sk.channels_running || 0) === 0
+          ? tr("仿真待机")
+          : tr("采集待机");
+      const cToTLabel = cToTActive
+        ? tr("转发映射")
+        : Number(tk.channels_total || 0) === 0
+          ? tr("未建转发")
+          : tr("转发待机");
+
       busHost.innerHTML =
         `<svg class="dash-topo-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">` +
-        `<path d="${link1}" fill="none" stroke="${hexToRgba(pal.series[0], 0.25)}" stroke-width="10" stroke-linecap="round"></path>` +
-        `<path class="dash-flow-pulse" d="${link1}" stroke="${pal.series[0]}"></path>` +
-        `<path d="${link2}" fill="none" stroke="${hexToRgba(pal.ok, 0.25)}" stroke-width="10" stroke-linecap="round"></path>` +
-        `<path class="dash-flow-pulse" d="${link2}" stroke="${pal.ok}"></path>` +
-        `<path class="dash-flow-pulse is-slow" d="${back1}" stroke="${pal.warn}"></path>` +
-        `<path class="dash-flow-pulse is-slow" d="${back2}" stroke="${pal.warn}"></path>` +
-        `<text x="242" y="${midY - 22}" text-anchor="middle" fill="${pal.textSub}" font-size="9.5">${esc(tr("采集链路"))}</text>` +
-        `<text x="498" y="${midY - 22}" text-anchor="middle" fill="${pal.textSub}" font-size="9.5">${esc(tr("转发映射"))}</text>` +
+        `<path d="${link1}" fill="none" stroke="${hexToRgba(sToCActive ? pal.series[0] : pal.textMuted, sToCActive ? 0.25 : 0.14)}" stroke-width="10" stroke-linecap="round"></path>` +
+        (sToCActive
+          ? `<path class="dash-flow-pulse" d="${link1}" stroke="${pal.series[0]}"></path>`
+          : `<path class="dash-flow-idle" d="${link1}" stroke="${pal.textMuted}"></path>`) +
+        `<path d="${link2}" fill="none" stroke="${hexToRgba(cToTActive ? pal.ok : pal.textMuted, cToTActive ? 0.25 : 0.14)}" stroke-width="10" stroke-linecap="round"></path>` +
+        (cToTActive
+          ? `<path class="dash-flow-pulse" d="${link2}" stroke="${pal.ok}"></path>`
+          : `<path class="dash-flow-idle" d="${link2}" stroke="${pal.textMuted}"></path>`) +
+        `<path class="${sToCActive ? "dash-flow-line" : "dash-flow-idle"}" d="${back1}" stroke="${sToCActive ? pal.warn : pal.textMuted}"></path>` +
+        `<path class="${cToTActive ? "dash-flow-line" : "dash-flow-idle"}" d="${back2}" stroke="${cToTActive ? pal.warn : pal.textMuted}"></path>` +
+        `<text x="242" y="${midY - 22}" text-anchor="middle" fill="${sToCActive ? pal.textSub : pal.textMuted}" font-size="9.5">${esc(sToCLabel)}</text>` +
+        `<text x="498" y="${midY - 22}" text-anchor="middle" fill="${cToTActive ? pal.textSub : pal.textMuted}" font-size="9.5">${esc(cToTLabel)}</text>` +
         `<text x="242" y="${midY + 46}" text-anchor="middle" fill="${pal.textMuted}" font-size="9">${esc(tr("遥控/遥调"))}</text>` +
         `<text x="498" y="${midY + 46}" text-anchor="middle" fill="${pal.textMuted}" font-size="9">${esc(tr("上行指令"))}</text>` +
         cards
@@ -1547,8 +1639,13 @@
         `</svg></div></div>`;
     }
 
-    // 5. 下中柱：采集端 C（实时吞吐双曲线 + 四遥 SVG 棒图）
+    // 5. 下中柱：采集端 C（真实吞吐增量折线 + 四遥 SVG 棒图）
     state.component = "c";
+    if ($("dash-all-c-source")) {
+      const cDb = c.source_db || "scdfe_c.db";
+      $("dash-all-c-source").textContent = `${cDb} · 累计收 ${fmtCompact(ck.rx_total)}`;
+      $("dash-all-c-source").title = `数据源：${cDb} 表 fes_channel_runtime_status（实时增量速率）`;
+    }
     pushTrendPoint(c);
     drawTrendCanvas();
     const cBars = $("dash-all-c-bars");
@@ -1665,6 +1762,36 @@
 
   // ==================== Canvas 交互（十字准星 Tooltip & 点击穿透） ====================
   function bindCanvasInteractions() {
+    const scopeCanvas = $("dash-scope-canvas");
+    const scopeTip = $("dash-scope-tip");
+    scopeCanvas?.addEventListener("mousemove", (ev) => {
+      const hist = state.scopeHistory;
+      if (!hist.length || !scopeTip) return;
+      const rect = scopeCanvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const padL = 48;
+      const padR = 22;
+      const ratio = Math.max(0, Math.min(1, (x - padL) / Math.max(1, rect.width - padL - padR)));
+      const idx = Math.round(ratio * (hist.length - 1));
+      if (idx !== state.scopeHoverIdx) {
+        state.scopeHoverIdx = idx;
+        drawScopeCanvas();
+      }
+      const h = hist[idx];
+      const rows = (h.points || [])
+        .map((pt, i) => `R${esc(pt.rtu_id)}#${esc(pt.pnt_no)} ${esc(String(pt.name || "").slice(0, 10))}: <b>${esc(fmtMeasureVal(h.values[i]))}${pt.unit ? " " + esc(pt.unit) : ""}</b>`)
+        .join("<br>");
+      scopeTip.hidden = false;
+      scopeTip.innerHTML = `<strong>${esc(h.label)}</strong><br>${rows}`;
+      scopeTip.style.left = Math.min(rect.width - 170, Math.max(8, x + 10)) + "px";
+      scopeTip.style.top = Math.max(6, ev.clientY - rect.top - 54) + "px";
+    });
+    scopeCanvas?.addEventListener("mouseleave", () => {
+      state.scopeHoverIdx = -1;
+      if (scopeTip) scopeTip.hidden = true;
+      drawScopeCanvas();
+    });
+
     const trendCanvas = $("dash-trend-canvas");
     const trendTip = $("dash-trend-tip");
     trendCanvas?.addEventListener("mousemove", (ev) => {
@@ -1790,18 +1917,6 @@
       if (state.data) renderHorizontalBars(state.data);
     });
 
-    $("dash-scope-tabs")?.addEventListener("click", (ev) => {
-      const btn = ev.target.closest("[data-scope-mode]");
-      if (!btn) return;
-      state.scopeMode = btn.dataset.scopeMode;
-      $("dash-scope-tabs").querySelectorAll("button").forEach((b) => {
-        const act = b.dataset.scopeMode === state.scopeMode;
-        b.classList.toggle("is-active", act);
-        b.setAttribute("aria-selected", String(act));
-      });
-      drawScopeCanvas();
-    });
-
     $("dash-t-left-tabs")?.addEventListener("click", (ev) => {
       const btn = ev.target.closest("[data-tleft-tab]");
       if (!btn) return;
@@ -1857,7 +1972,6 @@
       });
     }
 
-    startScopeLoop();
     scheduleRefresh(2000);
     loadOverview();
   }

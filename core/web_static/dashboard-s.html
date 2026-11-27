@@ -36,21 +36,19 @@
       <!-- S 端专属：上示波器波形+仿真服务矩阵 / 下三栏仪器台 -->
       <div class="dash-layout-s">
         <div class="dash-s-top">
-          <!-- 上左主视觉：多通道实时仿真示波器 -->
+          <!-- 上左主视觉：仿真端重点遥测实时趋势（100% 源自 fes_yc_define 实测值） -->
           <article class="dash-card">
             <div class="dash-card-head">
-              <h2>多通道实时仿真示波器</h2>
+              <h2>重点遥测实时趋势</h2>
               <div class="dash-head-right">
                 <div class="dash-legend" id="dash-scope-legend"></div>
-                <div class="dash-seg" id="dash-scope-tabs" role="tablist">
-                  <button type="button" class="is-active" data-scope-mode="sync" role="tab" aria-selected="true">实测同步</button>
-                  <button type="button" data-scope-mode="wave" role="tab" aria-selected="false">激励参考波</button>
-                </div>
+                <span class="dash-source-badge" id="dash-scope-source">—</span>
               </div>
             </div>
             <div class="dash-card-body dash-scope-wrap">
               <div class="dash-canvas-wrap dash-scope-canvas-host">
                 <canvas id="dash-scope-canvas" class="dash-canvas"></canvas>
+                <div id="dash-scope-tip" class="dash-tooltip" hidden></div>
               </div>
               <div class="dash-scope-readout" id="dash-scope-readout"></div>
             </div>
@@ -92,10 +90,10 @@
             <div class="dash-card-body dash-hbar-wrap" id="dash-hbar-host"></div>
           </article>
 
-          <!-- 下右：客户端接入雷达扫描 + 实时会话流 -->
+          <!-- 下右：客户端会话统计分布环图 + 实时会话流 -->
           <article class="dash-card">
             <div class="dash-card-head">
-              <h2>客户端接入雷达与交互</h2>
+              <h2>客户端会话统计与交互</h2>
               <span class="dash-card-meta" id="dash-feed-meta">—</span>
             </div>
             <div class="dash-card-body dash-radar-panel">

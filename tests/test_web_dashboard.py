@@ -99,9 +99,13 @@ class ThreeWebDashboardTests(unittest.TestCase):
                 data = json.loads(ro.read().decode("utf-8"))
                 self.assertEqual(ro.status, 200)
                 self.assertEqual(data["component"], expected_component)
+                self.assertTrue(data.get("source_db", "").endswith(".db"))
                 self.assertTrue(0 <= data["health_score"] <= 100)
                 for key in ("kpis", "points_by_kind", "yx_state", "protocols", "channels", "top_yc", "events"):
                     self.assertIn(key, data)
+                if data["top_yc"]:
+                    self.assertIn("refresh_time", data["top_yc"][0])
+                    self.assertIn("unit", data["top_yc"][0])
                 # 4. 三端合屏页面与同源聚合接口
                 conn.request("GET", "/dashboard-all")
                 rall = conn.getresponse()
@@ -159,6 +163,22 @@ class ThreeWebDashboardTests(unittest.TestCase):
         html = (ROOT / "scdfe_c" / "web" / "static" / "index.html").read_text(encoding="utf-8")
         self.assertIn('href="/dashboard"', html)
         self.assertLess(html.index('href="/dashboard"'), html.index('data-resource="scdfe"'))
+
+    def test_topbar_sibling_buttons_route_to_each_dashboard(self):
+        js = (ROOT / "core" / "web_static" / "workbench.js").read_text(encoding="utf-8")
+        self.assertIn('u.pathname = "/dashboard";', js)
+        self.assertIn('if (item.active && onOwnDashboard) return;', js)
+
+    def test_dashboards_have_no_synthetic_wave_or_decorative_spin_animations(self):
+        js = (ROOT / "core" / "web_static" / "dashboard.js").read_text(encoding="utf-8")
+        css = (ROOT / "core" / "web_static" / "dashboard.css").read_text(encoding="utf-8")
+        html_s = (ROOT / "core" / "web_static" / "dashboard-s.html").read_text(encoding="utf-8")
+        self.assertNotIn("Math.sin", js)
+        self.assertNotIn("startScopeLoop", js)
+        self.assertNotIn("激励参考波", html_s)
+        self.assertNotIn("dashOrbitSpin", css)
+        self.assertNotIn("dashHubBreath", css)
+        self.assertIn("fes_yc_define", js)
 
 
 if __name__ == "__main__":
