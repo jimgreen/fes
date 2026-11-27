@@ -4,8 +4,8 @@
   const STORAGE_PREFIX = "scada-layout-size-v2-";
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const configs = [
-    {selector: ".workbench-shell", key: "workbench-sidebar", property: "--workbench-sidebar-width", min: 150, max: 420, otherMin: 320, axis: "x", className: "wb-shell-resizable"},
-    {selector: ".shell", key: "c-sidebar", property: "--c-sidebar-width", min: 150, max: 420, otherMin: 320, axis: "x", className: "c-shell-resizable"},
+    /* 外层主侧边栏（.workbench-shell / .shell）已统一为默认隐藏 + 左缘悬停悬浮抽屉，
+       此处仅保留内部日志目录、分栏与上下区域的拖拽调整能力。 */
     {selector: ".lb-workspace", key: "log-files", property: "--log-files-width", min: 190, max: 560, otherMin: 320, axis: "x", className: "log-workspace-resizable"},
     {selector: ".log-workspace", key: "legacy-log-files", property: "--legacy-log-files-width", min: 190, max: 560, otherMin: 320, axis: "x", className: "legacy-log-workspace-resizable"},
     {selector: ".split", key: "split-first", property: "--split-first-width", min: 240, max: 760, otherMin: 320, axis: "x", className: "split-resizable"},

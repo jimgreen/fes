@@ -181,6 +181,19 @@ class WebUxV4EnhancementTests(unittest.TestCase):
         self.assertIn('/static/theme-init.js', c_index)
         self.assertIn('id="auto-refresh-interval"', c_index)
 
+        wb_js = (ROOT / "core" / "web_static" / "workbench.js").read_text(encoding="utf-8")
+        theme_css = (ROOT / "core" / "web_static" / "ui-theme.css").read_text(encoding="utf-8")
+        resizer_js = (ROOT / "core" / "web_static" / "layout-resizer.js").read_text(encoding="utf-8")
+        self.assertIn("initAutoHideSidebar", wb_js)
+        self.assertIn("ui-sidebar-edge", wb_js)
+        self.assertIn("ui-sidebar-toggle", wb_js)
+        self.assertIn("scada_sidebar_mode", wb_js)
+        self.assertIn("is-sidebar-peek", theme_css)
+        self.assertIn('data-sidebar-mode="dock"', theme_css)
+        self.assertIn('data-sidebar-hidden="1"', theme_css)
+        self.assertNotIn('selector: ".workbench-shell"', resizer_js)
+        self.assertNotIn('selector: ".shell"', resizer_js)
+
 
 if __name__ == "__main__":
     unittest.main()

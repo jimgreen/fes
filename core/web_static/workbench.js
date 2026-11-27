@@ -716,6 +716,238 @@
     }
   });
 
+  // ==================== 7. 左栏双模式（悬浮 float / 内嵌 dock）+ 双向可隐藏 ====================
+  function initAutoHideSidebar() {
+    const sidebar = document.querySelector(".workbench-sidebar, .sidebar");
+    if (!sidebar || document.getElementById("ui-sidebar-edge")) return;
+
+    const MODE_KEY = "scada_sidebar_mode";
+    const HIDDEN_KEY = "scada_sidebar_hidden";
+    let mode = "float";
+    let dockHidden = false;
+    try {
+      mode = localStorage.getItem(MODE_KEY) === "dock" ? "dock" : "float";
+      dockHidden = localStorage.getItem(HIDDEN_KEY) === "1";
+    } catch (_) { /* ignore */ }
+
+    const edge = document.createElement("div");
+    edge.id = "ui-sidebar-edge";
+    edge.className = "ui-sidebar-edge";
+    edge.setAttribute("aria-hidden", "true");
+    document.body.appendChild(edge);
+
+    // 侧栏顶部紧凑模式切换条（悬浮 | 内嵌 + 一键隐藏）
+    const bar = document.createElement("div");
+    bar.id = "ui-sidebar-bar";
+    bar.className = "ui-sidebar-bar";
+    bar.innerHTML =
+      '<div class="ui-sidebar-mode-seg" role="group" aria-label="左栏模式">' +
+      '<button type="button" class="ui-sidebar-mode-btn" data-sb-mode="float">悬浮</button>' +
+      '<button type="button" class="ui-sidebar-mode-btn" data-sb-mode="dock">内嵌</button>' +
+      '</div>' +
+      '<button type="button" id="ui-sidebar-hide" class="ui-sidebar-hide-btn" title="隐藏左栏" aria-label="隐藏左栏">⟨</button>';
+    sidebar.prepend(bar);
+
+    // 顶栏品牌左侧极简侧栏显隐开关按钮（悬浮/内嵌两种模式均可随时呼出或隐藏）
+    let toggleBtn = document.getElementById("ui-sidebar-toggle");
+    const brand = document.querySelector(".workbench-brand, .topbar .brand");
+    if (brand && !toggleBtn) {
+      toggleBtn = document.createElement("button");
+      toggleBtn.id = "ui-sidebar-toggle";
+      toggleBtn.type = "button";
+      toggleBtn.className = "ui-sidebar-toggle";
+      toggleBtn.innerHTML =
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>';
+      brand.prepend(toggleBtn);
+    }
+
+    let hideTimer = null;
+    let isPeekOpen = false;
+    const EDGE_ZONE_PX = 14;
+    const HIDE_DELAY_MS = 160;
+
+    const cancelHide = () => {
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+    };
+
+    const syncUi = () => {
+      document.documentElement.dataset.sidebarMode = mode;
+      document.documentElement.dataset.sidebarHidden = mode === "dock" && dockHidden ? "1" : "0";
+      bar.querySelectorAll("[data-sb-mode]").forEach((btn) => {
+        const active = btn.dataset.sbMode === mode;
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("aria-pressed", String(active));
+      });
+      const visible = mode === "dock" ? !dockHidden : isPeekOpen;
+      if (toggleBtn) {
+        toggleBtn.classList.toggle("is-active", visible);
+        toggleBtn.title = visible ? "隐藏左栏" : "展开左栏";
+        toggleBtn.setAttribute("aria-label", visible ? "隐藏左栏" : "展开左栏");
+        toggleBtn.setAttribute("aria-expanded", String(visible));
+      }
+      edge.title = mode === "dock" ? "点击展开内嵌左栏" : "移至左侧边缘展开悬浮左栏";
+    };
+
+    const persistState = () => {
+      try {
+        localStorage.setItem(MODE_KEY, mode);
+        localStorage.setItem(HIDDEN_KEY, dockHidden ? "1" : "0");
+      } catch (_) { /* ignore */ }
+    };
+
+    const showPeek = () => {
+      if (mode !== "float") return;
+      cancelHide();
+      if (isPeekOpen) return;
+      isPeekOpen = true;
+      document.body.classList.add("is-sidebar-peek");
+      sidebar.classList.add("is-peek");
+      syncUi();
+    };
+
+    const hidePeekNow = () => {
+      cancelHide();
+      if (!isPeekOpen) return;
+      isPeekOpen = false;
+      document.body.classList.remove("is-sidebar-peek");
+      sidebar.classList.remove("is-peek");
+      syncUi();
+    };
+
+    const schedulePeekHide = () => {
+      if (mode !== "float") return;
+      cancelHide();
+      hideTimer = setTimeout(() => {
+        if (mode !== "float") return;
+        if (sidebar.matches(":hover") || edge.matches(":hover")) return;
+        const active = document.activeElement;
+        if (active && sidebar.contains(active) && active !== document.body) return;
+        hidePeekNow();
+      }, HIDE_DELAY_MS);
+    };
+
+    const setMode = (nextMode) => {
+      const target = nextMode === "dock" ? "dock" : "float";
+      if (mode === target) return;
+      mode = target;
+      if (mode === "dock") {
+        hidePeekNow();
+        dockHidden = false;
+      } else {
+        dockHidden = false;
+        showPeek();
+      }
+      persistState();
+      syncUi();
+      window.dispatchEvent(new Event("resize"));
+    };
+
+    const hideCurrent = () => {
+      if (mode === "dock") {
+        dockHidden = true;
+        persistState();
+        syncUi();
+        window.dispatchEvent(new Event("resize"));
+      } else {
+        hidePeekNow();
+      }
+    };
+
+    const toggleSidebar = () => {
+      if (mode === "dock") {
+        dockHidden = !dockHidden;
+        persistState();
+        syncUi();
+        window.dispatchEvent(new Event("resize"));
+      } else if (isPeekOpen) {
+        hidePeekNow();
+      } else {
+        showPeek();
+      }
+    };
+
+    bar.addEventListener("click", (ev) => {
+      const mBtn = ev.target?.closest?.("[data-sb-mode]");
+      if (mBtn) {
+        ev.stopPropagation();
+        setMode(mBtn.dataset.sbMode);
+        return;
+      }
+      if (ev.target?.closest?.("#ui-sidebar-hide")) {
+        ev.stopPropagation();
+        hideCurrent();
+      }
+    });
+
+    toggleBtn?.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      toggleSidebar();
+    });
+
+    edge.addEventListener("mouseenter", () => {
+      if (mode === "float") showPeek();
+    });
+    edge.addEventListener("click", () => {
+      if (mode === "dock" && dockHidden) {
+        dockHidden = false;
+        persistState();
+        syncUi();
+        window.dispatchEvent(new Event("resize"));
+      } else if (mode === "float") {
+        showPeek();
+      }
+    });
+
+    sidebar.addEventListener("mouseenter", () => {
+      if (mode === "float") showPeek();
+    });
+    sidebar.addEventListener("mouseleave", schedulePeekHide);
+
+    document.addEventListener("mousemove", (ev) => {
+      if (mode !== "float" || ev.clientY < 46) return;
+      if (ev.clientX <= EDGE_ZONE_PX) {
+        showPeek();
+        return;
+      }
+      if (isPeekOpen) {
+        const rect = sidebar.getBoundingClientRect();
+        if (ev.clientX > rect.right + 12) {
+          schedulePeekHide();
+        }
+      }
+    }, { passive: true });
+
+    document.addEventListener("mouseleave", schedulePeekHide);
+    sidebar.addEventListener("focusin", () => { if (mode === "float") showPeek(); });
+    sidebar.addEventListener("focusout", schedulePeekHide);
+
+    // SPA 页面点击功能按钮切页后：悬浮模式自动收起，内嵌模式保持常驻
+    sidebar.addEventListener("click", (ev) => {
+      if (mode !== "float") return;
+      const navBtn = ev.target?.closest?.("button.nav");
+      if (navBtn && !ev.target?.closest?.("summary")) {
+        hidePeekNow();
+      }
+    });
+
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && mode === "float" && isPeekOpen && !document.querySelector("dialog[open]")) {
+        hidePeekNow();
+      }
+    });
+
+    syncUi();
+    window.scadaSidebar = {
+      getMode: () => mode,
+      setMode,
+      toggle: toggleSidebar,
+      hide: hideCurrent,
+    };
+  }
+
   window.scadaFocusContext = { read: readFocus, write: writeFocus, set: writeFocus, clear: clearFocus };
   window.scadaTrackCommand = scadaTrackCommand;
   window.scadaOpenCmdk = openCmdk;
@@ -726,6 +958,7 @@
     bindFocusWatchers();
     initWorkbenchLinks();
     mountCmdkTrigger();
+    initAutoHideSidebar();
     refreshAlerts();
     setInterval(() => { if (!document.hidden) refreshAlerts(); }, 12000);
   }

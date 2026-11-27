@@ -15,14 +15,7 @@ body[data-dashboard="1"] .page-heading {
   display: none !important;
 }
 
-/* 一键大屏投屏模式：隐藏侧栏与拖拽条，满屏展示 */
-body.dash-fullscreen .workbench-sidebar,
-body.dash-fullscreen .layout-resizer {
-  display: none !important;
-}
-body.dash-fullscreen .workbench-shell {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
+/* 一键大屏投屏模式：满屏展示（左栏已全局默认隐藏，悬停左缘仍可平滑呼出切页） */
 body.dash-fullscreen .workbench-content {
   padding: 6px !important;
 }

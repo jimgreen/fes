@@ -3272,6 +3272,209 @@ tr:hover .scada-copy-btn,
   stroke-linejoin: round;
 }
 
+/* ==================== 左栏双模式（悬浮 float / 内嵌 dock）与双向可隐藏 ==================== */
+
+.shell,
+.workbench-shell,
+.shell.c-shell-resizable,
+.workbench-shell.wb-shell-resizable {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.sidebar,
+.workbench-sidebar {
+  position: fixed !important;
+  top: 46px !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: 204px !important;
+  max-width: 78vw !important;
+  z-index: 48 !important;
+  transform: translateX(calc(-100% - 4px)) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  box-shadow: 12px 0 32px rgba(15, 23, 42, 0.28) !important;
+  border-right: 1px solid var(--border-color) !important;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.16s ease, visibility 0.2s ease !important;
+}
+
+body.is-sidebar-peek .sidebar,
+body.is-sidebar-peek .workbench-sidebar,
+.sidebar.is-peek,
+.workbench-sidebar.is-peek {
+  transform: translateX(0) !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
+/* 内嵌模式（dock）展开态：常驻左栏 + 主内容自适应剩余宽度 */
+html[data-sidebar-mode="dock"]:not([data-sidebar-hidden="1"]) body:not(.dash-fullscreen) .shell,
+html[data-sidebar-mode="dock"]:not([data-sidebar-hidden="1"]) body:not(.dash-fullscreen) .workbench-shell {
+  grid-template-columns: 196px minmax(0, 1fr) !important;
+}
+html[data-sidebar-mode="dock"]:not([data-sidebar-hidden="1"]) body:not(.dash-fullscreen) .sidebar,
+html[data-sidebar-mode="dock"]:not([data-sidebar-hidden="1"]) body:not(.dash-fullscreen) .workbench-sidebar {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 196px !important;
+  z-index: 2 !important;
+  transform: none !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  box-shadow: none !important;
+}
+html[data-sidebar-mode="dock"]:not([data-sidebar-hidden="1"]) body:not(.dash-fullscreen) .ui-sidebar-edge {
+  display: none !important;
+}
+
+/* 内嵌模式（dock）隐藏态：彻底收起释放 100% 全宽 */
+html[data-sidebar-mode="dock"][data-sidebar-hidden="1"] .sidebar,
+html[data-sidebar-mode="dock"][data-sidebar-hidden="1"] .workbench-sidebar {
+  display: none !important;
+}
+
+/* 顶栏左侧极简侧栏显隐开关按钮 */
+.ui-sidebar-toggle {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  margin-right: 2px;
+  border-radius: 6px !important;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-subtle) !important;
+  color: var(--text-secondary) !important;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.ui-sidebar-toggle:hover {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+.ui-sidebar-toggle.is-active {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-color)) !important;
+  color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+.ui-sidebar-toggle svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 侧栏顶部紧凑模式切换条（悬浮 | 内嵌 + 隐藏按钮） */
+.ui-sidebar-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 2px 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+  flex-shrink: 0;
+}
+.ui-sidebar-mode-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+.ui-sidebar-mode-btn {
+  height: 22px;
+  padding: 0 8px !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: inherit !important;
+  opacity: 0.72;
+  cursor: pointer;
+}
+.ui-sidebar-mode-btn:hover {
+  opacity: 1;
+}
+.ui-sidebar-mode-btn.is-active {
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+  opacity: 1;
+}
+.ui-sidebar-hide-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0 !important;
+  border-radius: 5px !important;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent) !important;
+  background: transparent !important;
+  color: inherit !important;
+  opacity: 0.75;
+  cursor: pointer;
+  font-size: 13px !important;
+  line-height: 1;
+}
+.ui-sidebar-hide-btn:hover {
+  opacity: 1;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
+
+/* 左边缘透明悬停感应热区与极淡微光竖条提示 */
+.ui-sidebar-edge {
+  position: fixed;
+  top: 46px;
+  left: 0;
+  bottom: 0;
+  width: 14px;
+  z-index: 46;
+  cursor: pointer;
+  background: transparent;
+}
+.ui-sidebar-edge::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 44px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 55%, var(--text-muted));
+  opacity: 0.38;
+  transition: opacity 0.18s ease, height 0.18s ease, background 0.18s ease;
+}
+.ui-sidebar-edge:hover::after,
+body.is-sidebar-peek .ui-sidebar-edge::after {
+  opacity: 0.92;
+  height: 64px;
+  background: var(--accent);
+}
+body.is-sidebar-peek .ui-sidebar-edge {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .workbench-sidebar,
+  .ui-sidebar-edge::after {
+    transition: none !important;
+  }
+}
+
 @media (max-width: 960px) {
   .workbench-topbar,
   .topbar {

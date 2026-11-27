@@ -1,37 +1,26 @@
-/* 首屏同步主题初始化脚本（<1KB，兼容严格 CSP）：在 HTML 渲染前设置 data-theme，消除暗黑/科幻主题切页白闪。 */
+/* 首屏同步初始化主题/语言/左栏状态，防切页闪烁（兼容严格 CSP） */
 (function () {
   "use strict";
-  var THEMES = {
-    "minimalist-light": 0,
-    "arctic-frost": 0,
-    "warm-paper": 0,
-    "slate-daylight": 0,
-    "bento-grid": 0,
-    "editorial": 0,
-    "precision-dark": 1,
-    "ocean-slate": 1,
-    "nord-dark": 1,
-    "industrial-amber": 1,
-    "glassmorphism": 1,
-    "sci-fi-cyan": 1,
-    "sci-fi-purple": 1,
-    "sci-fi-matrix": 1
+  var T = {
+    "minimalist-light": 0, "arctic-frost": 0, "warm-paper": 0, "slate-daylight": 0,
+    "bento-grid": 0, "editorial": 0, "precision-dark": 1, "ocean-slate": 1,
+    "nord-dark": 1, "industrial-amber": 1, "glassmorphism": 1,
+    "sci-fi-cyan": 1, "sci-fi-purple": 1, "sci-fi-matrix": 1
   };
-  var LEGACY = { "sci-fi": "sci-fi-cyan", "neo-brutalism": "minimalist-light" };
+  var L = { "sci-fi": "sci-fi-cyan", "neo-brutalism": "minimalist-light" };
+  var has = Object.prototype.hasOwnProperty;
   try {
-    var saved = localStorage.getItem("scada_ui_theme");
-    if (saved) {
-      var theme = Object.prototype.hasOwnProperty.call(THEMES, saved)
-        ? saved
-        : (Object.prototype.hasOwnProperty.call(LEGACY, saved) ? LEGACY[saved] : "minimalist-light");
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.dataset.colorScheme = THEMES[theme] ? "dark" : "light";
+    var d = document.documentElement, ds = d.dataset, ls = localStorage;
+    var s = ls.getItem("scada_ui_theme");
+    if (s) {
+      var t = has.call(T, s) ? s : (has.call(L, s) ? L[s] : "minimalist-light");
+      ds.theme = t;
+      ds.colorScheme = T[t] ? "dark" : "light";
     }
-    var lang = localStorage.getItem("scada_ui_lang");
-    if (lang === "zh-CN" || lang === "en-US" || lang === "ru-RU") {
-      document.documentElement.lang = lang;
-    }
-  } catch (_) {
-    // 隐私模式忽略
-  }
+    var g = ls.getItem("scada_ui_lang");
+    if (g === "zh-CN" || g === "en-US" || g === "ru-RU") d.lang = g;
+    var m = ls.getItem("scada_sidebar_mode");
+    ds.sidebarMode = m === "dock" ? "dock" : "float";
+    ds.sidebarHidden = (m === "dock" && ls.getItem("scada_sidebar_hidden") === "1") ? "1" : "0";
+  } catch (_) {}
 })();
